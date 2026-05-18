@@ -1,0 +1,15 @@
+.git
+.gitignore
+docker/certbot
+docker/.env
+docker/.env.*
+!docker/.env.*.example
+backend/.venv
+backend/__pycache__
+backend/.pytest_cache
+backend/.ruff_cache
+backend/.mypy_cache
+frontend/node_modules
+frontend/dist
+**/__pycache__
+**/*.pyc

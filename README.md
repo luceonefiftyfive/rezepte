@@ -13,3 +13,10 @@ The final product is supposed to be available as an web app, working on all kind
 The system should be containerized (Docker), run on a remote server, be easy to deploy, and get backuped regularly to a local server.
 
 
+## Additional information
+
+### Docker commands
+
+Common Docker and deployment commands are documented here:
+
+[Docker commands](docs/docker-commands.md)

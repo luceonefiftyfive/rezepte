@@ -216,3 +216,14 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# real Docker environment files
+docker/.env
+docker/.env.*
+
+# keep templates
+!docker/.env.example
+!docker/.env.*.example
+
+# generated certificate data
+docker/certbot/

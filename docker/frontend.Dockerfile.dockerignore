@@ -1,0 +1,13 @@
+.git
+.gitignore
+docker/certbot
+docker/.env
+docker/.env.*
+!docker/.env.*.example
+frontend/node_modules
+frontend/dist
+frontend/.vite
+backend/.venv
+backend/__pycache__
+**/__pycache__
+**/*.pyc
