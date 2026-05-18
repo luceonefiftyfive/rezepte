@@ -1,0 +1,30 @@
+services:
+  nginx:
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/prod/conf.d:/etc/nginx/conf.d:ro
+      - ./certbot/www:/var/www/certbot
+      - ./certbot/conf:/etc/letsencrypt
+
+  backend:
+    environment:
+      REZEPTE_TEST: "0"
+
+  keycloak:
+    command:
+      - start
+      - --http-enabled=true
+      - --http-relative-path=/auth
+      - --proxy-headers=xforwarded
+      - --hostname=${APP_BASE_URL}/auth
+      - --hostname-admin=${APP_BASE_URL}/auth
+
+  certbot:
+    image: certbot/certbot:latest
+    profiles:
+      - tools
+    volumes:
+      - ./certbot/www:/var/www/certbot
+      - ./certbot/conf:/etc/letsencrypt

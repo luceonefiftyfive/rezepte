@@ -1,0 +1,17 @@
+[project]
+name = "familienrezepte-backend"
+version = "0.1.0"
+description = "Test backend for Familienrezepte"
+requires-python = ">=3.13,<3.14"
+dependencies = [
+    "fastapi>=0.115,<1",
+    "uvicorn[standard]>=0.34,<1",
+    "pydantic>=2.10,<3",
+    "pydantic-settings>=2.7,<3",
+    "pymongo>=4.13,<5",
+    "boto3>=1.35,<2",
+    "python-multipart>=0.0.20,<1"
+]
+
+[tool.uv]
+package = false
