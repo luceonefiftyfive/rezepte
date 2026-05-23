@@ -227,3 +227,6 @@ docker/.env.*
 
 # generated certificate data
 docker/certbot/
+
+# Node.js dependencies
+node_modules/
