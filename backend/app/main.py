@@ -8,7 +8,7 @@ from typing import Any
 import boto3
 from botocore.client import Config
 from botocore.exceptions import BotoCoreError, ClientError
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, HTTPException, UploadFile, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from pymongo import AsyncMongoClient
 from pymongo.errors import PyMongoError
@@ -37,6 +37,9 @@ class Settings(BaseSettings):
     s3_bucket: str = Field(default="familienrezepte-images", alias="S3_BUCKET")
     s3_access_key: str = Field(default="rezepte-minio", alias="S3_ACCESS_KEY")
     s3_secret_key: str = Field(default="change-me-minio-password", alias="S3_SECRET_KEY")
+    keycloak_jwks_url: str | None = Field(default=None, alias="KEYCLOAK_JWKS_URL")
+    keycloak_issuer: str | None = Field(default=None, alias="KEYCLOAK_ISSUER")
+    keycloak_audience: str | None = Field(default=None, alias="KEYCLOAK_AUDIENCE")
 
     @property
     def mode(self) -> str:
@@ -77,6 +80,8 @@ app = FastAPI(
     title=settings.app_name,
     lifespan=lifespan,
 )
+
+from .auth import require_authenticated, require_groups  # noqa: E402
 
 
 app.add_middleware(
@@ -178,7 +183,7 @@ async def list_recipes() -> list[RecipeOut]:
 
 
 @app.post("/recipes", response_model=RecipeOut)
-async def create_recipe(recipe: RecipeIn) -> RecipeOut:
+async def create_recipe(recipe: RecipeIn, _payload: dict = Depends(require_authenticated)) -> RecipeOut:
     now = datetime.now(timezone.utc).isoformat()
 
     document = {
@@ -195,7 +200,7 @@ async def create_recipe(recipe: RecipeIn) -> RecipeOut:
 
 
 @app.delete("/recipes/{recipe_id}")
-async def delete_recipe(recipe_id: str) -> dict[str, Any]:
+async def delete_recipe(recipe_id: str, _payload: dict = Depends(require_groups("admin"))) -> dict[str, Any]:
     result = await app.state.db.recipes.delete_one({"id": recipe_id})
 
     if result.deleted_count == 0:
