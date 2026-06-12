@@ -226,4 +226,9 @@ docker/.env.*
 !docker/.env.*.example
 
 # generated certificate data
-docker/certbot/
+docker/certbot/ 
+
+# Frontend build output
+frontend/node_modules/
+frontend/dist/
+frontend/package-lock.json
