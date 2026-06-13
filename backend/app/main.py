@@ -81,7 +81,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-from .auth import require_authenticated, require_groups  # noqa: E402
+from .auth import require_authenticated, require_groups, router as auth_router  # noqa: E402
 
 
 app.add_middleware(
@@ -91,6 +91,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# register auth routes (login / callback)
+app.include_router(auth_router)
 
 
 class RecipeIn(BaseModel):

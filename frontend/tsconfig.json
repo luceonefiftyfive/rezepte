@@ -1,7 +1,7 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "module": "nodenext",
+    "module": "es2022",
     "moduleResolution": "bundler",
     "strict": true,
     "useDefineForClassFields": true,

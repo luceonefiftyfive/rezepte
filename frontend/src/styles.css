@@ -147,3 +147,31 @@ a {
     grid-template-columns: 1fr;
   }
 }
+
+/* Modal / Login dialog */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 60;
+}
+
+.modal-card {
+  width: min(420px, calc(100% - 40px));
+  background: white;
+  padding: 20px;
+  border-radius: 14px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12);
+}
+
+.modal-card h3 {
+  margin: 0 0 8px;
+}
+
+.modal-card p {
+  margin: 0;
+  color: #6b7280;
+}
