@@ -10,10 +10,10 @@ Use the helper script:
 
 The stack has two modes:
 
-| Mode | Selection | Files |
-|---|---|---|
-| Test / development | `REZEPTE_TEST=1` | `docker/.env.test`, `docker/.env.test.secrets`, `docker/docker-compose.test.yml` |
-| Production | `REZEPTE_TEST` unset | `docker/.env.prod`, `docker/.env.prod.secrets`, `docker/docker-compose.prod.yml` |
+| Mode               | Selection            | Files                                                                            |
+| ------------------ | -------------------- | -------------------------------------------------------------------------------- |
+| Test / development | `REZEPTE_TEST=1`     | `docker/.env.test`, `docker/.env.test.secrets`, `docker/docker-compose.test.yml` |
+| Production         | `REZEPTE_TEST` unset | `docker/.env.prod`, `docker/.env.prod.secrets`, `docker/docker-compose.prod.yml` |
 
 The base Compose file is always:
 
@@ -183,7 +183,7 @@ sudo ./docker/rezepte.sh --profile tools run --rm certbot certonly \
 Check generated files:
 
 ```bash
-sudo 
+sudo
 ```
 
 Switch back to HTTPS:

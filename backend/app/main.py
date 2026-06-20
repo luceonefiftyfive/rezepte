@@ -1,19 +1,34 @@
-
 import asyncio
+import logging
+import os
+import secrets
 import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import Any
 
 import boto3
+import httpx
 from botocore.client import Config
 from botocore.exceptions import BotoCoreError, ClientError
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from pymongo import AsyncMongoClient
 from pymongo.errors import PyMongoError
-from pydantic import Field, BaseModel
-from pydantic_settings import BaseSettings, SettingsConfigDict
+
+KEYCLOAK_URL = os.getenv("KEYCLOAK_URL", "http://keycloak:8080")
+KEYCLOAK_REALM = os.getenv("KEYCLOAK_REALM", "rezepte")
+KEYCLOAK_CLIENT_ID = os.getenv("KEYCLOAK_CLIENT_ID", "frontend")
+KEYCLOAK_CLIENT_SECRET = os.getenv(
+    "KEYCLOAK_CLIENT_SECRET", "change-me-frontend-secret"
+)
+
+log = logging.getLogger(__name__)
+
+SESSIONS = {}
 
 
 class Settings(BaseSettings):
@@ -36,7 +51,9 @@ class Settings(BaseSettings):
     s3_endpoint_url: str = Field(default="http://minio:9000", alias="S3_ENDPOINT_URL")
     s3_bucket: str = Field(default="familienrezepte-images", alias="S3_BUCKET")
     s3_access_key: str = Field(default="rezepte-minio", alias="S3_ACCESS_KEY")
-    s3_secret_key: str = Field(default="change-me-minio-password", alias="S3_SECRET_KEY")
+    s3_secret_key: str = Field(
+        default="change-me-minio-password", alias="S3_SECRET_KEY"
+    )
 
     @property
     def mode(self) -> str:
@@ -71,6 +88,7 @@ async def lifespan(app: FastAPI):
 
     await app.state.mongo_client.close()
 
+
 settings = Settings()
 
 app = FastAPI(
@@ -100,6 +118,11 @@ class RecipeOut(BaseModel):
     description: str | None = None
     tags: list[str] = Field(default_factory=list)
     created_at: str
+
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
 
 
 @app.get("/")
@@ -156,22 +179,14 @@ async def system_checks() -> dict[str, Any]:
             "error": str(exc),
         }
 
-    checks["ok"] = all(
-        checks[name]["ok"]
-        for name in ["api", "mongodb", "s3"]
-    )
+    checks["ok"] = all(checks[name]["ok"] for name in ["api", "mongodb", "s3"])
 
     return checks
 
 
 @app.get("/recipes", response_model=list[RecipeOut])
 async def list_recipes() -> list[RecipeOut]:
-    cursor = (
-        app.state.db.recipes
-        .find({}, {"_id": 0})
-        .sort("created_at", -1)
-        .limit(100)
-    )
+    cursor = app.state.db.recipes.find({}, {"_id": 0}).sort("created_at", -1).limit(100)
 
     recipes = [RecipeOut(**document) async for document in cursor]
     return recipes
@@ -242,3 +257,119 @@ async def upload_test_image(file: UploadFile = File(...)) -> dict[str, Any]:
         "size": len(content),
         "content_type": file.content_type,
     }
+
+
+@app.post("/auth/login")
+async def login(data: LoginRequest):
+    token_url = f"{KEYCLOAK_URL}/realms/{KEYCLOAK_REALM}/protocol/openid-connect/token"
+    log.error(
+        f"Attempting login for user '{data.username}' against Keycloak at {token_url}"
+    )
+
+    async with httpx.AsyncClient() as client:
+        data_content = {
+            "grant_type": "password",
+            "client_id": KEYCLOAK_CLIENT_ID,
+            "client_secret": KEYCLOAK_CLIENT_SECRET,
+            "username": data.username,
+            "password": data.password,
+            "scope": "openid profile email",
+        }
+        log.error(f"Sending token request to Keycloak with data: {data_content}")
+        r = await client.post(
+            token_url,
+            data=data_content,
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+        )
+
+    if r.status_code != 200:
+        log.error("Invalid credentials")
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+
+    tokens = r.json()
+    session_id = secrets.token_urlsafe(32)
+
+    SESSIONS[session_id] = {
+        "access_token": tokens["access_token"],
+        "refresh_token": tokens.get("refresh_token"),
+        "id_token": tokens.get("id_token"),
+    }
+
+    response = JSONResponse({"ok": True})
+    response.set_cookie(
+        key="session_id",
+        value=session_id,
+        httponly=True,
+        secure=True,
+        samesite="lax",
+        path="/",
+    )
+    return response
+
+
+@app.get("/auth/me")
+def me(request: Request):
+    session_id = request.cookies.get("session_id")
+
+    if not session_id or session_id not in SESSIONS:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    return {"authenticated": True}
+
+
+@app.post("/auth/logout")
+async def logout(request: Request):
+    session_id = request.cookies.get("session_id")
+
+    session = SESSIONS.pop(session_id, None) if session_id else None
+
+    if session and session.get("refresh_token"):
+        logout_url = (
+            f"{KEYCLOAK_URL}/realms/{KEYCLOAK_REALM}/protocol/openid-connect/logout"
+        )
+
+        async with httpx.AsyncClient() as client:
+            await client.post(
+                logout_url,
+                data={
+                    "client_id": KEYCLOAK_CLIENT_ID,
+                    "client_secret": KEYCLOAK_CLIENT_SECRET,
+                    "refresh_token": session["refresh_token"],
+                },
+                headers={"Content-Type": "application/x-www-form-urlencoded"},
+            )
+
+    response = JSONResponse({"ok": True})
+    response.delete_cookie("session_id", path="/")
+    return response
+
+
+@app.get("/testapp")
+async def test_app(request: Request):
+
+    REALM = "rezepte"
+    CLIENT_ID = "backend-web"
+    USERNAME = "joergu"
+    PASSWORD = "joergu"
+    token_url = f"{KEYCLOAK_URL}/realms/{REALM}/protocol/openid-connect/token"
+
+    async with httpx.AsyncClient() as client:
+        data = {
+            "grant_type": "password",
+            "client_id": CLIENT_ID,
+            "username": USERNAME,
+            "password": PASSWORD,
+        }
+        log.error(
+            f"Testing Keycloak token endpoint at {token_url} with user '{USERNAME}'"
+        )
+        log.error(f"data...{data}")
+        res = await client.post(
+            token_url,
+            data=data,
+        )
+
+        return {
+            "status_code": httpx.codes.OK,
+            "response": f"{res.status_code} -> {res.text}",
+        }
