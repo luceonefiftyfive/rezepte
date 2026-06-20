@@ -147,3 +147,22 @@ a {
     grid-template-columns: 1fr;
   }
 }
+
+.login-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.login-dialog {
+  background: white;
+  padding: 2rem;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  min-width: 300px;
+}

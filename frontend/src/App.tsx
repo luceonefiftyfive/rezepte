@@ -1,4 +1,5 @@
 import { ChangeEvent, FormEvent, useEffect, useState } from "react";
+import AuthButton from "./AuthButton";
 
 const API_BASE = "/api";
 
@@ -190,6 +191,7 @@ export default function App() {
           <button type="button" onClick={() => void loadRecipes()}>
             Reload recipes
           </button>
+          <AuthButton />
         </div>
       </section>
 

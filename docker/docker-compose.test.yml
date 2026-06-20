@@ -1,7 +1,7 @@
 services:
   nginx:
     ports:
-      - "8080:80"
+      - "8280:80"
     volumes:
       - ./nginx/test/conf.d:/etc/nginx/conf.d:ro
 
