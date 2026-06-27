@@ -7,7 +7,7 @@ This project uses VS Code formatters to keep Markdown, frontend, Python, JSON, Y
 | File format                     | Formatter / Tool | VS Code extension         | Extension ID                      |
 | ------------------------------- | ---------------- | ------------------------- | --------------------------------- |
 | Markdown, incl. tables          | Prettier         | Prettier - Code formatter | `esbenp.prettier-vscode`          |
-| ==                              | Markdownlint     | Markdownlint              | `DavidAnson.vascode-markdownlint` |
+| ==                              | Markdownlint     | Markdownlint              | `DavidAnson.vscode-markdownlint` |
 | TSX / CSS / JSON / JSONC / YAML | Prettier         | Prettier - Code formatter | `esbenp.prettier-vscode`          |
 | Python                          | Black Formatter  | Python                    | `ms-python.python`                |
 | ==                              | ==               | Black Formatter           | `ms-python.black-formatter`       |
