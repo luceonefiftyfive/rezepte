@@ -2,6 +2,10 @@
 
 New recipes app - successor of [previous recipe app variant](https://github.com/luceonefiftyfive/recipes)
 
+<p align="center">
+  <img src="./frontend/assets/rezepte-logo-sage.png" alt="Rezepte logo" width="120" />
+</p>
+
 ## Goal
 
 General target vision is a **family recipe collection** as a private, multi-user recipe database with different recipe books.
