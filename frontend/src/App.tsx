@@ -1,6 +1,7 @@
-import { ChangeEvent, FormEvent, useEffect, useState } from "react";
+import { ChangeEvent, FormEvent, useEffect, useState } from 'react';
+import AuthButton from './AuthButton';
 
-const API_BASE = "/api";
+const API_BASE = '/api';
 
 type HealthResponse = {
   status: string;
@@ -38,10 +39,7 @@ type ImageUploadResponse = {
   content_type: string;
 };
 
-async function fetchJson<T>(
-  path: string,
-  options: RequestInit = {}
-): Promise<T> {
+async function fetchJson<T>(path: string, options: RequestInit = {}): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, options);
 
   if (!response.ok) {
@@ -56,109 +54,105 @@ export default function App() {
   const [health, setHealth] = useState<HealthResponse | null>(null);
   const [checks, setChecks] = useState<SystemChecksResponse | null>(null);
   const [recipes, setRecipes] = useState<Recipe[]>([]);
-  const [title, setTitle] = useState<string>("Apfelkuchen");
-  const [description, setDescription] = useState<string>("Ein Testrezept.");
-  const [imageResult, setImageResult] = useState<ImageUploadResponse | null>(
-    null
-  );
-  const [error, setError] = useState<string>("");
+  const [title, setTitle] = useState<string>('Apfelkuchen');
+  const [description, setDescription] = useState<string>('Ein Testrezept.');
+  const [imageResult, setImageResult] = useState<ImageUploadResponse | null>(null);
+  const [error, setError] = useState<string>('');
 
   async function loadHealth(): Promise<void> {
-    setError("");
+    setError('');
 
     try {
-      const data = await fetchJson<HealthResponse>("/health");
+      const data = await fetchJson<HealthResponse>('/health');
       setHealth(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unknown error");
+      setError(err instanceof Error ? err.message : 'Unknown error');
     }
   }
 
   async function loadChecks(): Promise<void> {
-    setError("");
+    setError('');
 
     try {
-      const data = await fetchJson<SystemChecksResponse>("/system/checks");
+      const data = await fetchJson<SystemChecksResponse>('/system/checks');
       setChecks(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unknown error");
+      setError(err instanceof Error ? err.message : 'Unknown error');
     }
   }
 
   async function loadRecipes(): Promise<void> {
-    setError("");
+    setError('');
 
     try {
-      const data = await fetchJson<Recipe[]>("/recipes");
+      const data = await fetchJson<Recipe[]>('/recipes');
       setRecipes(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unknown error");
+      setError(err instanceof Error ? err.message : 'Unknown error');
     }
   }
 
   async function createRecipe(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
-    setError("");
+    setError('');
 
     try {
-      await fetchJson<Recipe>("/recipes", {
-        method: "POST",
+      await fetchJson<Recipe>('/recipes', {
+        method: 'POST',
         headers: {
-          "Content-Type": "application/json"
+          'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           title,
           description,
-          tags: ["test", "familienrezepte"]
-        })
+          tags: ['test', 'familienrezepte'],
+        }),
       });
 
       await loadRecipes();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unknown error");
+      setError(err instanceof Error ? err.message : 'Unknown error');
     }
   }
 
   async function deleteRecipe(id: string): Promise<void> {
-    setError("");
+    setError('');
 
     try {
       await fetchJson<{ ok: boolean; deleted_id: string }>(`/recipes/${id}`, {
-        method: "DELETE"
+        method: 'DELETE',
       });
 
       await loadRecipes();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unknown error");
+      setError(err instanceof Error ? err.message : 'Unknown error');
     }
   }
 
-  async function uploadImage(
-    event: ChangeEvent<HTMLInputElement>
-  ): Promise<void> {
+  async function uploadImage(event: ChangeEvent<HTMLInputElement>): Promise<void> {
     const file = event.target.files?.[0];
 
     if (!file) {
       return;
     }
 
-    setError("");
+    setError('');
     setImageResult(null);
 
     const formData = new FormData();
-    formData.append("file", file);
+    formData.append('file', file);
 
     try {
-      const data = await fetchJson<ImageUploadResponse>("/images/test-upload", {
-        method: "POST",
-        body: formData
+      const data = await fetchJson<ImageUploadResponse>('/images/test-upload', {
+        method: 'POST',
+        body: formData,
       });
 
       setImageResult(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unknown error");
+      setError(err instanceof Error ? err.message : 'Unknown error');
     } finally {
-      event.target.value = "";
+      event.target.value = '';
     }
   }
 
@@ -174,10 +168,7 @@ export default function App() {
         <div>
           <p className="eyebrow">Server installation test</p>
           <h1>Familienrezepte</h1>
-          <p>
-            This test frontend verifies nginx, FastAPI, MongoDB and
-            S3-compatible storage.
-          </p>
+          <p>This test frontend verifies nginx, FastAPI, MongoDB and S3-compatible storage.</p>
         </div>
 
         <div className="button-row">
@@ -190,6 +181,7 @@ export default function App() {
           <button type="button" onClick={() => void loadRecipes()}>
             Reload recipes
           </button>
+          <AuthButton />
         </div>
       </section>
 
@@ -218,18 +210,12 @@ export default function App() {
         <form onSubmit={createRecipe} className="form">
           <label>
             Title
-            <input
-              value={title}
-              onChange={(event) => setTitle(event.target.value)}
-            />
+            <input value={title} onChange={(event) => setTitle(event.target.value)} />
           </label>
 
           <label>
             Description
-            <input
-              value={description}
-              onChange={(event) => setDescription(event.target.value)}
-            />
+            <input value={description} onChange={(event) => setDescription(event.target.value)} />
           </label>
 
           <button type="submit">Save recipe to MongoDB</button>
@@ -251,10 +237,7 @@ export default function App() {
                   <small>{recipe.created_at}</small>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => void deleteRecipe(recipe.id)}
-                >
+                <button type="button" onClick={() => void deleteRecipe(recipe.id)}>
                   Delete
                 </button>
               </li>
