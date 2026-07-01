@@ -1,34 +1,53 @@
 import asyncio
 import logging
-import os
-import secrets
+import typing as ty
 import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
-from typing import Any
 
 import boto3
-import httpx
 from botocore.client import Config
 from botocore.exceptions import BotoCoreError, ClientError
-from fastapi import FastAPI, File, HTTPException, Request, UploadFile
+from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.security import OAuth2PasswordRequestForm
+from passlib.context import CryptContext
 from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pymongo import AsyncMongoClient
 from pymongo.errors import PyMongoError
 
-KEYCLOAK_URL = os.getenv("KEYCLOAK_URL", "http://keycloak:8080")
-KEYCLOAK_REALM = os.getenv("KEYCLOAK_REALM", "rezepte")
-KEYCLOAK_CLIENT_ID = os.getenv("KEYCLOAK_CLIENT_ID", "frontend")
-KEYCLOAK_CLIENT_SECRET = os.getenv(
-    "KEYCLOAK_CLIENT_SECRET", "change-me-frontend-secret"
-)
-
 log = logging.getLogger(__name__)
 
 SESSIONS = {}
+
+
+class User(BaseModel):
+    username: str
+    email: str | None = None
+    first_name: str
+    last_name: str
+
+
+class Login(BaseModel):
+    username: str
+    password: str
+
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+
+
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+
+class Hash:
+    def bcrypt(password: str):
+        return pwd_context.hash(password)
+
+    def verify(password: str, hashed_password: str):
+        return pwd_context.verify(password, hashed_password)
 
 
 class Settings(BaseSettings):
@@ -46,7 +65,10 @@ class Settings(BaseSettings):
         default="mongodb://rezepte:change-me@mongodb:27017/rezepte?authSource=admin",
         alias="MONGODB_URI",
     )
-    mongodb_database: str = Field(default="rezepte", alias="MONGODB_DATABASE")
+    mongodb_recipe_database: str = Field(
+        default="rezepte", alias="MONGODB_RECIPES_DATABASE"
+    )
+    mongodb_user_database: str = Field(default="user", alias="MONGODB_USER_DATABASE")
 
     s3_endpoint_url: str = Field(default="http://minio:9000", alias="S3_ENDPOINT_URL")
     s3_bucket: str = Field(default="familienrezepte-images", alias="S3_BUCKET")
@@ -81,7 +103,8 @@ def create_s3_client():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     app.state.mongo_client = AsyncMongoClient(settings.mongodb_uri)
-    app.state.db = app.state.mongo_client[settings.mongodb_database]
+    app.state.recipes_db = app.state.mongo_client[settings.mongodb_recipes_database]
+    app.state.user_db = app.state.mongo_client[settings.mongodb_user_database]
     app.state.s3_client = create_s3_client()
 
     yield
@@ -126,7 +149,7 @@ class LoginRequest(BaseModel):
 
 
 @app.get("/")
-async def root() -> dict[str, Any]:
+async def root() -> dict[str, ty.Any]:
     return {
         "service": settings.app_name,
         "status": "ok",
@@ -146,20 +169,29 @@ async def health() -> dict[str, str]:
 
 
 @app.get("/system/checks")
-async def system_checks() -> dict[str, Any]:
-    checks: dict[str, Any] = {
+async def system_checks() -> dict[str, ty.Any]:
+    checks: dict[str, ty.Any] = {
         "api": {"ok": True},
-        "mongodb": {"ok": False},
+        "mongo_recipes_db": {"ok": False},
+        "mongo_user_db": {"ok": False},
         "s3": {"ok": False},
     }
 
     try:
-        await app.state.db.command("ping")
-        checks["mongodb"] = {"ok": True}
+        await app.state.recipes_db.command("ping")
+        checks["mongo_recipes_db"] = {"ok": True}
     except PyMongoError as exc:
-        checks["mongodb"] = {"ok": False, "error": str(exc)}
+        checks["mongo_recipes_db"] = {"ok": False, "error": str(exc)}
     except Exception as exc:
-        checks["mongodb"] = {"ok": False, "error": str(exc)}
+        checks["mongo_recipes_db"] = {"ok": False, "error": str(exc)}
+
+    try:
+        await app.state.user_db.command("ping")
+        checks["mongo_user_db"] = {"ok": True}
+    except PyMongoError as exc:
+        checks["mongo_user_db"] = {"ok": False, "error": str(exc)}
+    except Exception as exc:
+        checks["mongo_user_db"] = {"ok": False, "error": str(exc)}
 
     try:
         await asyncio.to_thread(
@@ -179,14 +211,21 @@ async def system_checks() -> dict[str, Any]:
             "error": str(exc),
         }
 
-    checks["ok"] = all(checks[name]["ok"] for name in ["api", "mongodb", "s3"])
+    checks["ok"] = all(
+        checks[name]["ok"]
+        for name in ["api", "mongo_recipes_db", "mongo_user_db", "s3"]
+    )
 
     return checks
 
 
 @app.get("/recipes", response_model=list[RecipeOut])
 async def list_recipes() -> list[RecipeOut]:
-    cursor = app.state.db.recipes.find({}, {"_id": 0}).sort("created_at", -1).limit(100)
+    cursor = (
+        app.state.recipes_db.recipes.find({}, {"_id": 0})
+        .sort("created_at", -1)
+        .limit(100)
+    )
 
     recipes = [RecipeOut(**document) async for document in cursor]
     return recipes
@@ -210,8 +249,8 @@ async def create_recipe(recipe: RecipeIn) -> RecipeOut:
 
 
 @app.delete("/recipes/{recipe_id}")
-async def delete_recipe(recipe_id: str) -> dict[str, Any]:
-    result = await app.state.db.recipes.delete_one({"id": recipe_id})
+async def delete_recipe(recipe_id: str) -> dict[str, ty.Any]:
+    result = await app.state.recipes_db.recipes.delete_one({"id": recipe_id})
 
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Recipe not found")
@@ -223,7 +262,7 @@ async def delete_recipe(recipe_id: str) -> dict[str, Any]:
 
 
 @app.post("/images/test-upload")
-async def upload_test_image(file: UploadFile = File(...)) -> dict[str, Any]:
+async def upload_test_image(file: UploadFile = File(...)) -> dict[str, ty.Any]:
     if not file.content_type or not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="Only image files are allowed")
 
@@ -259,117 +298,15 @@ async def upload_test_image(file: UploadFile = File(...)) -> dict[str, Any]:
     }
 
 
-@app.post("/auth/login")
-async def login(data: LoginRequest):
-    token_url = f"{KEYCLOAK_URL}/realms/{KEYCLOAK_REALM}/protocol/openid-connect/token"
-    log.error(
-        f"Attempting login for user '{data.username}' against Keycloak at {token_url}"
-    )
-
-    async with httpx.AsyncClient() as client:
-        data_content = {
-            "grant_type": "password",
-            "client_id": KEYCLOAK_CLIENT_ID,
-            "client_secret": KEYCLOAK_CLIENT_SECRET,
-            "username": data.username,
-            "password": data.password,
-            "scope": "openid profile email",
-        }
-        log.error(f"Sending token request to Keycloak with data: {data_content}")
-        r = await client.post(
-            token_url,
-            data=data_content,
-            headers={"Content-Type": "application/x-www-form-urlencoded"},
-        )
-
-    if r.status_code != 200:
-        log.error("Invalid credentials")
-        raise HTTPException(status_code=401, detail="Invalid credentials")
-
-    tokens = r.json()
-    session_id = secrets.token_urlsafe(32)
-
-    SESSIONS[session_id] = {
-        "access_token": tokens["access_token"],
-        "refresh_token": tokens.get("refresh_token"),
-        "id_token": tokens.get("id_token"),
-    }
-
-    response = JSONResponse({"ok": True})
-    response.set_cookie(
-        key="session_id",
-        value=session_id,
-        httponly=True,
-        secure=True,
-        samesite="lax",
-        path="/",
-    )
-    return response
+@app.post("/register")
+def create_user(user: User):
+    hashed_pass = Hash.bcrypt(user.password)
+    user_dict = user.dict()
+    user_dict["password"] = hashed_pass
+    user_id = app.state.user_db.insert_one(user_dict).inserted_id
+    return {"result": "User created", "user_id": str(user_id)}
 
 
-@app.get("/auth/me")
-def me(request: Request):
-    session_id = request.cookies.get("session_id")
-
-    if not session_id or session_id not in SESSIONS:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-
-    return {"authenticated": True}
-
-
-@app.post("/auth/logout")
-async def logout(request: Request):
-    session_id = request.cookies.get("session_id")
-
-    session = SESSIONS.pop(session_id, None) if session_id else None
-
-    if session and session.get("refresh_token"):
-        logout_url = (
-            f"{KEYCLOAK_URL}/realms/{KEYCLOAK_REALM}/protocol/openid-connect/logout"
-        )
-
-        async with httpx.AsyncClient() as client:
-            await client.post(
-                logout_url,
-                data={
-                    "client_id": KEYCLOAK_CLIENT_ID,
-                    "client_secret": KEYCLOAK_CLIENT_SECRET,
-                    "refresh_token": session["refresh_token"],
-                },
-                headers={"Content-Type": "application/x-www-form-urlencoded"},
-            )
-
-    response = JSONResponse({"ok": True})
-    response.delete_cookie("session_id", path="/")
-    return response
-
-
-@app.get("/testapp")
-async def test_app(request: Request):
-
-    REALM = "rezepte"
-    CLIENT_ID = "backend-web"
-    USERNAME = "joergu"
-    PASSWORD = "joergu"
-    token_url = f"{KEYCLOAK_URL}/realms/{REALM}/protocol/openid-connect/token"
-
-    async with httpx.AsyncClient() as client:
-        data = {
-            "grant_type": "password",
-            "client_id": CLIENT_ID,
-            "username": USERNAME,
-            "password": PASSWORD,
-        }
-        log.error(
-            f"Testing Keycloak token endpoint at {token_url} with user '{USERNAME}'"
-        )
-        log.error(f"data...{data}")
-        res = await client.post(
-            token_url,
-            data=data,
-        )
-
-        return {
-            "status_code": httpx.codes.OK,
-            "response": f"{res.status_code} -> {res.text}",
-        }
+@app.post("/login")
+def login_user(login: OAuth2PasswordRequestForm = Depends()):
+    user = app.state.user_db.users.find_one({"username": login.username})
