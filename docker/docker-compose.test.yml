@@ -1,7 +1,7 @@
 services:
   nginx:
     ports:
-      - "8280:80"
+      - '8280:80'
     volumes:
       - ./nginx/test/conf.d:/etc/nginx/conf.d:ro
 
@@ -10,22 +10,12 @@ services:
 
   backend:
     environment:
-      REZEPTE_TEST: "1"
+      REZEPTE_TEST: '1'
     depends_on:
       mongodb:
         condition: service_healthy
       minio:
         condition: service_started
-      keycloak:
-        condition: service_started
-
-  keycloak:
-    command:
-      - start-dev
-      - --http-enabled=true
-      - --http-relative-path=/auth
-      - --proxy-headers=xforwarded
-      - --hostname=${APP_BASE_URL}/auth
 
   minio:
     image: minio/minio:latest
@@ -37,7 +27,7 @@ services:
       MINIO_ROOT_USER: ${S3_ACCESS_KEY:?S3_ACCESS_KEY is required}
       MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:?S3_SECRET_KEY is required}
     ports:
-      - "9101:9001"
+      - '9101:9001'
     networks:
       - rezepte
 
