@@ -6,87 +6,24 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
 import boto3
+from app.core.settings import Settings
+from app.models.recipes import RecipeIn, RecipeOut
+from app.routers.users import (
+    get_current_user,
+    require_admin_or_super_admin,
+    require_super_admin,
+)
+from app.routers.users import router as users_router
 from botocore.client import Config
 from botocore.exceptions import BotoCoreError, ClientError
 from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.security import OAuth2PasswordRequestForm
-from passlib.context import CryptContext
-from pydantic import BaseModel, Field
-from pydantic_settings import BaseSettings, SettingsConfigDict
-from pymongo import AsyncMongoClient
+from motor.motor_asyncio import AsyncIOMotorClient
 from pymongo.errors import PyMongoError
 
 log = logging.getLogger(__name__)
 
 SESSIONS = {}
-
-
-class User(BaseModel):
-    username: str
-    email: str | None = None
-    first_name: str
-    last_name: str
-
-
-class Login(BaseModel):
-    username: str
-    password: str
-
-
-class Token(BaseModel):
-    access_token: str
-    token_type: str
-
-
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
-
-class Hash:
-    def bcrypt(password: str):
-        return pwd_context.hash(password)
-
-    def verify(password: str, hashed_password: str):
-        return pwd_context.verify(password, hashed_password)
-
-
-class Settings(BaseSettings):
-    model_config = SettingsConfigDict(
-        extra="ignore",
-        populate_by_name=True,
-    )
-
-    rezepte_test: bool = Field(default=False, alias="REZEPTE_TEST")
-    app_base_url: str = Field(default="http://localhost:8080", alias="APP_BASE_URL")
-
-    app_name: str = "Familienrezepte API"
-
-    mongodb_uri: str = Field(
-        default="mongodb://rezepte:change-me@mongodb:27017/rezepte?authSource=admin",
-        alias="MONGODB_URI",
-    )
-    mongodb_recipe_database: str = Field(
-        default="rezepte", alias="MONGODB_RECIPES_DATABASE"
-    )
-    mongodb_user_database: str = Field(default="user", alias="MONGODB_USER_DATABASE")
-
-    s3_endpoint_url: str = Field(default="http://minio:9000", alias="S3_ENDPOINT_URL")
-    s3_bucket: str = Field(default="familienrezepte-images", alias="S3_BUCKET")
-    s3_access_key: str = Field(default="rezepte-minio", alias="S3_ACCESS_KEY")
-    s3_secret_key: str = Field(
-        default="change-me-minio-password", alias="S3_SECRET_KEY"
-    )
-
-    @property
-    def mode(self) -> str:
-        return "test" if self.rezepte_test else "production"
-
-    @property
-    def cors_origins(self) -> list[str]:
-        if self.rezepte_test:
-            return ["*"]
-
-        return [self.app_base_url]
 
 
 def create_s3_client():
@@ -102,9 +39,9 @@ def create_s3_client():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    app.state.mongo_client = AsyncMongoClient(settings.mongodb_uri)
-    app.state.recipes_db = app.state.mongo_client[settings.mongodb_recipes_database]
-    app.state.user_db = app.state.mongo_client[settings.mongodb_user_database]
+
+    app.state.mongo_client = AsyncIOMotorClient(settings.mongodb_url)
+    app.state.db = app.state.mongo_client[settings.mongodb_database]
     app.state.s3_client = create_s3_client()
 
     yield
@@ -128,24 +65,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
-class RecipeIn(BaseModel):
-    title: str = Field(..., min_length=1)
-    description: str | None = None
-    tags: list[str] = Field(default_factory=list)
-
-
-class RecipeOut(BaseModel):
-    id: str
-    title: str
-    description: str | None = None
-    tags: list[str] = Field(default_factory=list)
-    created_at: str
-
-
-class LoginRequest(BaseModel):
-    username: str
-    password: str
+app.include_router(users_router)
 
 
 @app.get("/")
@@ -172,26 +92,17 @@ async def health() -> dict[str, str]:
 async def system_checks() -> dict[str, ty.Any]:
     checks: dict[str, ty.Any] = {
         "api": {"ok": True},
-        "mongo_recipes_db": {"ok": False},
-        "mongo_user_db": {"ok": False},
+        "mongo_db": {"ok": False},
         "s3": {"ok": False},
     }
 
     try:
-        await app.state.recipes_db.command("ping")
-        checks["mongo_recipes_db"] = {"ok": True}
+        await app.state.db.command("ping")
+        checks["mongo_db"] = {"ok": True}
     except PyMongoError as exc:
-        checks["mongo_recipes_db"] = {"ok": False, "error": str(exc)}
+        checks["mongo_db"] = {"ok": False, "error": str(exc)}
     except Exception as exc:
-        checks["mongo_recipes_db"] = {"ok": False, "error": str(exc)}
-
-    try:
-        await app.state.user_db.command("ping")
-        checks["mongo_user_db"] = {"ok": True}
-    except PyMongoError as exc:
-        checks["mongo_user_db"] = {"ok": False, "error": str(exc)}
-    except Exception as exc:
-        checks["mongo_user_db"] = {"ok": False, "error": str(exc)}
+        checks["mongo_db"] = {"ok": False, "error": str(exc)}
 
     try:
         await asyncio.to_thread(
@@ -221,11 +132,7 @@ async def system_checks() -> dict[str, ty.Any]:
 
 @app.get("/recipes", response_model=list[RecipeOut])
 async def list_recipes() -> list[RecipeOut]:
-    cursor = (
-        app.state.recipes_db.recipes.find({}, {"_id": 0})
-        .sort("created_at", -1)
-        .limit(100)
-    )
+    cursor = app.state.db.recipes.find({}, {"_id": 0}).sort("created_at", -1).limit(100)
 
     recipes = [RecipeOut(**document) async for document in cursor]
     return recipes
@@ -250,7 +157,7 @@ async def create_recipe(recipe: RecipeIn) -> RecipeOut:
 
 @app.delete("/recipes/{recipe_id}")
 async def delete_recipe(recipe_id: str) -> dict[str, ty.Any]:
-    result = await app.state.recipes_db.recipes.delete_one({"id": recipe_id})
+    result = await app.state.db.recipes.delete_one({"id": recipe_id})
 
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Recipe not found")
@@ -298,15 +205,53 @@ async def upload_test_image(file: UploadFile = File(...)) -> dict[str, ty.Any]:
     }
 
 
-@app.post("/register")
-def create_user(user: User):
-    hashed_pass = Hash.bcrypt(user.password)
-    user_dict = user.dict()
-    user_dict["password"] = hashed_pass
-    user_id = app.state.user_db.insert_one(user_dict).inserted_id
-    return {"result": "User created", "user_id": str(user_id)}
+@app.get("/test-access")
+def test_access(
+    current_user: ty.Annotated[dict, Depends(get_current_user)],
+):
+    return {
+        "message": "You are authenticated",
+        "username": current_user["username"],
+    }
 
 
-@app.post("/login")
-def login_user(login: OAuth2PasswordRequestForm = Depends()):
-    user = app.state.user_db.users.find_one({"username": login.username})
+@app.get("/test-admin-access")
+def test_admin_access(
+    current_user: ty.Annotated[dict, Depends(require_admin_or_super_admin)],
+):
+    return {
+        "message": "You are admin or super-admin",
+        "username": current_user["username"],
+    }
+
+
+@app.get("/test-super-admin-access")
+def test_super_admin_access(
+    current_user: ty.Annotated[dict, Depends(require_super_admin)],
+):
+    return {
+        "message": "You are super-admin",
+        "username": current_user["username"],
+    }
+
+
+@app.get("/test-access")
+async def test_access(current_user: ty.Annotated[dict, Depends(get_current_user)]):
+    return {"message": "You are authenticated", "username": current_user["username"]}
+
+
+@app.get("/test-admin-access")
+async def test_admin_access(
+    current_user: ty.Annotated[dict, Depends(require_admin_or_super_admin)],
+):
+    return {
+        "message": "You are admin or super-admin",
+        "username": current_user["username"],
+    }
+
+
+@app.get("/test-super-admin-access")
+async def test_super_admin_access(
+    current_user: ty.Annotated[dict, Depends(require_super_admin)],
+):
+    return {"message": "You are super-admin", "username": current_user["username"]}
