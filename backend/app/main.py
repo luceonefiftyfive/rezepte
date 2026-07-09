@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
 import boto3
+from app.core.database import get_mongo_client
 from app.core.settings import Settings
 from app.models.recipes import RecipeIn, RecipeOut
 from app.routers.users import (
@@ -14,16 +15,26 @@ from app.routers.users import (
     require_super_admin,
 )
 from app.routers.users import router as users_router
+from app.services.user_service import UserService
 from botocore.client import Config
 from botocore.exceptions import BotoCoreError, ClientError
 from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from motor.motor_asyncio import AsyncIOMotorClient
 from pymongo.errors import PyMongoError
 
 log = logging.getLogger(__name__)
 
 SESSIONS = {}
+
+
+def configure_logging() -> None:
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    )
+
+
+configure_logging()
 
 
 def create_s3_client():
@@ -40,9 +51,12 @@ def create_s3_client():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
 
-    app.state.mongo_client = AsyncIOMotorClient(settings.mongodb_url)
+    app.state.mongo_client = get_mongo_client()
     app.state.db = app.state.mongo_client[settings.mongodb_database]
     app.state.s3_client = create_s3_client()
+
+    # Bootstrap superuser if not exists
+    await UserService(app.state.db).bootstrap_superuser()
 
     yield
 
@@ -122,10 +136,7 @@ async def system_checks() -> dict[str, ty.Any]:
             "error": str(exc),
         }
 
-    checks["ok"] = all(
-        checks[name]["ok"]
-        for name in ["api", "mongo_recipes_db", "mongo_user_db", "s3"]
-    )
+    checks["ok"] = all(checks[name]["ok"] for name in ["api", "mongo_db", "s3"])
 
     return checks
 

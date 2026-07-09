@@ -181,7 +181,6 @@ export default function App() {
           <button type="button" onClick={() => void loadRecipes()}>
             Reload recipes
           </button>
-          <AuthButton />
         </div>
       </section>
 
@@ -202,6 +201,10 @@ export default function App() {
           <h2>System checks</h2>
           <pre>{JSON.stringify(checks, null, 2)}</pre>
         </div>
+      </section>
+
+      <section className="card">
+        <AuthButton />
       </section>
 
       <section className="card">
@@ -267,11 +270,6 @@ export default function App() {
           <li>
             <a href="/api/system/checks" target="_blank" rel="noreferrer">
               /api/system/checks
-            </a>
-          </li>
-          <li>
-            <a href="/auth/" target="_blank" rel="noreferrer">
-              /auth/
             </a>
           </li>
         </ul>
