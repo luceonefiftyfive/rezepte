@@ -1,4 +1,6 @@
-from pydantic import EmailStr
+import os
+
+from pydantic import EmailStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -10,6 +12,17 @@ class Settings(BaseSettings):
 
     mongodb_url: str = "mongodb://localhost:27017"
     mongodb_database: str = "rezepte"
+
+    @model_validator(mode="after")
+    def _set_mongodb_url_from_uri(self):
+        mongodb_uri = os.getenv("MONGODB_URI")
+        if mongodb_uri:
+            self.mongodb_url = mongodb_uri
+        else:
+            mongodb_url = os.getenv("MONGODB_URL")
+            if mongodb_url and self.mongodb_url in ("", "mongodb://localhost:27017"):
+                self.mongodb_url = mongodb_url
+        return self
 
     jwt_secret_key: str = "CHANGE_ME_IN_PRODUCTION"
     jwt_algorithm: str = "HS256"

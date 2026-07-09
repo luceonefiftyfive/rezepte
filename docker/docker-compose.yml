@@ -23,6 +23,8 @@ services:
       context: ..
       dockerfile: docker/backend.Dockerfile
     restart: unless-stopped
+    environment:
+      MONGODB_URL: ${MONGODB_URL:-mongodb://mongodb:27017}
     env_file:
       - ${REZEPTE_ENV_FILE}
       - ${REZEPTE_SECRETS_FILE}
@@ -39,7 +41,7 @@ services:
       - ${REZEPTE_ENV_FILE}
       - ${REZEPTE_SECRETS_FILE}
     volumes:
-      - mongodb_data:/data/db
+      - ${MONGODB_DATA_DIR:-/var/lib/mongo}:/data/db
     healthcheck:
       test:
         [
@@ -52,9 +54,6 @@ services:
       start_period: 20s
     networks:
       - rezepte
-
-volumes:
-  mongodb_data:
 
 networks:
   rezepte:

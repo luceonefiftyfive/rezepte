@@ -2,7 +2,7 @@ import pytest
 from app.core.database import get_db
 from app.core.security import hash_password
 from app.main import app
-from httpx import ASGITransport, AsyncClient
+from httpx2 import ASGITransport, AsyncClient
 from mongomock_motor import AsyncMongoMockClient
 
 

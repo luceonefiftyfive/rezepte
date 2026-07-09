@@ -1,9 +1,13 @@
+import logging
+
 from app.core.security import hash_password, now_utc, verify_password
 from app.core.settings import settings
 from app.models.user import GroupRole, Role, UserCreate
 from app.repositories.user_repository import UserRepository
 from fastapi import HTTPException
 from motor.motor_asyncio import AsyncIOMotorDatabase
+
+log = logging.getLogger(__name__)
 
 
 class UserService:
@@ -14,6 +18,7 @@ class UserService:
         await self.repository.ensure_indexes()
         existing = await self.repository.find_active_super_admin()
         if existing:
+            log.info("Superuser already exists, skipping bootstrap")
             return
 
         user = UserCreate(
@@ -28,6 +33,9 @@ class UserService:
         doc = self.create_user_document(user)
         doc["email_verified"] = True
         await self.repository.insert(doc)
+        log.info(
+            "Bootstrapped superuser with username '%s'", settings.superuser_username
+        )
 
     def create_user_document(self, data: UserCreate) -> dict:
         timestamp = now_utc()
@@ -52,11 +60,18 @@ class UserService:
         return user
 
     async def authenticate_user(self, username: str, password: str) -> dict | None:
+        log.info("Authenticating user '%s'", username)
         user = await self.repository.find_by_username(username)
         if not user or not user.get("is_active", True):
+            log.info(
+                "Authentication failed for user '%s': user not found or inactive",
+                username,
+            )
             return None
         if not verify_password(password, user["password_hash"]):
+            log.info("Authentication failed for user '%s': invalid password", username)
             return None
+        log.info("User '%s' authenticated successfully", username)
         return user
 
     async def ensure_username_and_email_unique(self, username: str, email: str) -> None:

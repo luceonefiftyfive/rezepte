@@ -1,5 +1,5 @@
 import pytest
-from httpx import AsyncClient
+from httpx2 import AsyncClient
 
 
 def auth_header(token: str) -> dict:
@@ -10,7 +10,7 @@ async def login(
     client: AsyncClient, username="admin", password="admin-password"
 ) -> str:
     response = await client.post(
-        "/auth/login", data={"username": username, "password": password}
+        "/auth/login", json={"username": username, "password": password}
     )
     assert response.status_code == 200, response.text
     return response.json()["access_token"]

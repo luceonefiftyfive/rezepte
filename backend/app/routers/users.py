@@ -5,6 +5,7 @@ from app.core.security import create_access_token
 from app.core.settings import settings
 from app.models.user import (
     GroupsUpdate,
+    LoginRequest,
     OwnProfileUpdate,
     Role,
     SuperAdminUpdate,
@@ -16,7 +17,7 @@ from app.models.user import (
 from app.repositories.user_repository import UserRepository
 from app.services.user_service import UserService
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
@@ -77,10 +78,10 @@ def require_admin_or_super_admin(
 
 @router.post("/auth/login", response_model=TokenResponse)
 async def login(
-    form_data: ty.Annotated[OAuth2PasswordRequestForm, Depends()],
+    data: LoginRequest,
     service: ty.Annotated[UserService, Depends(get_user_service)],
 ):
-    user = await service.authenticate_user(form_data.username, form_data.password)
+    user = await service.authenticate_user(data.username, data.password)
     if not user:
         raise HTTPException(status_code=401, detail="Invalid username or password")
     return TokenResponse(
