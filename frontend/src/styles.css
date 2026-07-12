@@ -218,3 +218,58 @@ a {
     grid-template-columns: 1fr;
   }
 }
+
+.main-nav {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 24px;
+  padding: 8px;
+  border-radius: 16px;
+  background: white;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
+}
+
+.main-nav button {
+  background: transparent;
+  color: #374151;
+}
+
+.main-nav button:hover,
+.main-nav button.active {
+  background: #111827;
+  color: white;
+}
+
+.section-heading,
+.header-user,
+.user-card__header,
+.user-card__actions,
+.admin-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.muted { color: #6b7280; }
+.button-secondary { background: #e5e7eb; color: #111827; }
+.button-danger { background: #b91c1c; }
+.button-small { padding: 7px 10px; }
+select { border: 1px solid #d1d5db; border-radius: 12px; padding: 10px 12px; font: inherit; }
+.form-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.user-list, .group-editor { display: grid; gap: 16px; }
+.group-row { display: grid; grid-template-columns: 1fr 160px auto; gap: 8px; }
+.checkbox-label { display: flex; grid-auto-flow: column; justify-content: start; align-items: center; }
+.checkbox-label input { width: auto; }
+.badge-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.badge { padding: 5px 9px; border-radius: 999px; background: #dbeafe; font-size: 13px; font-weight: 700; }
+.badge--danger { background: #fee2e2; color: #991b1b; }
+.user-card--inactive { opacity: 0.65; }
+
+@media (max-width: 800px) {
+  .form-grid { grid-template-columns: 1fr; }
+  .group-row { grid-template-columns: 1fr; }
+  .main-nav { flex-direction: column; }
+}
