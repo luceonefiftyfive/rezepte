@@ -1,54 +1,59 @@
-# rezepte frontend
+# Familienrezepte – Frontend
 
-This document first collect ideas and decisions for the frontend of the **rezepte** project.
-It is currently thought of as an idea-gathering document. Detailed decisions on implementation, technology, actual screens, etc. are to be included later on.
+React-/Vite-Frontend für das aktuelle FastAPI-Backend.
 
-## Goal
+## Enthaltene Funktionen
 
-The frontend should provide the user interface (UI) for reading, searching, creating, editing, and managing recipes.
+- Anmeldung über `/auth/login` und Laden des aktuellen Benutzers über `/auth/me`
+- Speicherung des Zugriffstokens im Browser
+- Systemstatus für API, MongoDB und S3
+- Tests für angemeldete Benutzer, Administratoren und Super-Administratoren
+- Rezept anlegen, auflisten, durchsuchen und löschen
+- Bild-Upload zum vorhandenen S3-Testendpunkt
+- Benutzer anlegen, Gruppenrollen verwalten, Super-Admin-Status setzen und Benutzer deaktivieren
+- Deutsche Benutzeroberfläche
 
-The final product is supposed to be available as a web app, working on all kinds of devices, especially including:
+## Entwicklung
 
-- Computer / Laptop
-- Tablet
-- Phone (rather small, portrait)
+```bash
+npm install
+npm run dev
+```
 
-The frontend should be easy to develop, test, build, and deploy as part of the containerized system.
+Vite leitet `/api` standardmäßig an `http://localhost:8000` weiter und entfernt dabei das Präfix `/api`.
+Ein anderes Backend kann gesetzt werden mit:
 
-## Frontend scope
+```bash
+VITE_DEV_API_TARGET=http://backend:8000 npm run dev
+```
 
-The frontend should support:
+## Produktions-Build
 
-- Viewing recipes
-- Searching recipes
-- Creating and editing recipes
-- Organizing recipes in recipe books
-- User login and settings
-- ...
+```bash
+npm run build
+```
 
-## Design direction
+Das Ergebnis liegt anschließend in `dist/`.
 
-Core idea is to have a **warm family cookbook with a clean practical web app**
+## Konfiguration
 
-**Main title and app name**: ...
+Siehe `.env.example`:
 
-**Fitting logo:**
+```env
+VITE_API_BASE_URL=/api
+VITE_DEV_API_TARGET=http://localhost:8000
+```
 
-**Color scheme:**
+In einer produktiven Umgebung sollte der Reverse Proxy `/api/*` an FastAPI weiterleiten.
 
-- ...
+## Recipe editor V2
 
-**Fonts:**
+The recipe editor supports structured ingredient sections, ingredients with normalized units, custom units, preparation notes, optional ingredients, ordered instruction steps, yield, preparation/cooking/resting times, tags, recipe-book IDs, editing and deletion.
 
-**Screens:**
+Run tests and build:
 
-1. Home, Dashboard? (with recently visited?), Search (possibly with filter: that I liked, that other liked; or star ranking system?)
-2.
-
-?? (stuff like supported layouts? Component style if that makes sense? Accessibility features? Core components like menu??)
-
-## Example screens
-
-Available here: [Figma](https://www.figma.com/design/ETiKV13QgjQhCWmKSxanvm/rezepte?m=auto&t=qNAfaY4bL9jHMwhN-6)
-
-## Technology idea
+```bash
+npm install
+npm test
+npm run build
+```

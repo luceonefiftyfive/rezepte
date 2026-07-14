@@ -21,7 +21,7 @@ class UserCreate(BaseModel):
     first_name: str = Field(min_length=1)
     last_name: str = Field(min_length=1)
     email: EmailStr
-    groups: list[GroupRole] = []
+    groups: list[GroupRole] = Field(default_factory=list)
     is_super_admin: bool = False
 
 

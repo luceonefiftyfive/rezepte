@@ -23,10 +23,10 @@ export default function App() {
     <main className="page">
       <AppHeader />
 
-      <nav className="main-nav" aria-label="Main navigation">
-        <button className={visibleSection === 'general' ? 'active' : ''} onClick={() => setSection('general')}>General</button>
-        {isAuthenticated && <button className={visibleSection === 'recipes' ? 'active' : ''} onClick={() => setSection('recipes')}>Recipe entry</button>}
-        {mayManageUsers && <button className={visibleSection === 'admin' ? 'active' : ''} onClick={() => setSection('admin')}>User administration</button>}
+      <nav className="main-nav" aria-label="Hauptnavigation">
+        <button className={visibleSection === 'general' ? 'active' : ''} onClick={() => setSection('general')}>System</button>
+        {isAuthenticated && <button className={visibleSection === 'recipes' ? 'active' : ''} onClick={() => setSection('recipes')}>Rezepte</button>}
+        {mayManageUsers && <button className={visibleSection === 'admin' ? 'active' : ''} onClick={() => setSection('admin')}>Benutzerverwaltung</button>}
       </nav>
 
       {!isAuthenticated && <LoginPanel />}
