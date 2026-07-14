@@ -1,27 +1,30 @@
 [project]
 name = "familienrezepte-backend"
 version = "0.1.0"
-description = "Backend for Familienrezepte"
+description = "Test backend for Familienrezepte"
 requires-python = ">=3.13,<3.14"
 dependencies = [
     "fastapi>=0.115,<1",
     "uvicorn[standard]>=0.34,<1",
-    "motor>=3.7",
     "pydantic>=2.10,<3",
-    "email-validator>=2.0,<3",
+    "email-validator>=2.2,<3",
     "pydantic-settings>=2.7,<3",
-    "python-jose[cryptography]>=3.3,<4",
+    "pymongo>=4.13,<5",
+    "motor>=3.7,<4",
     "boto3>=1.35,<2",
-    "openpyxl>=3.1,<4",
     "python-multipart>=0.0.20,<1",
-    "httpx2>=2.0,<3",
-    "pytest>=7.4,<8",
-    "pytest-asyncio>=0.22,<1",
-    "mongomock-motor",
+    "python-jose>=3.5,<4",
+    "httpx2>=2.5,<3",
 ]
 
 [tool.uv]
 package = false
+[dependency-groups]
+dev = [
+    "mongomock-motor>=0.0.36,<1",
+    "pytest>=8.3,<10",
+]
 
 [tool.pytest.ini_options]
-pythonpath = ["."]
+pythonpath = ["src"]
+testpaths = ["src/tests"]

@@ -12,7 +12,7 @@ ENV UV_LINK_MODE=copy
 COPY backend/pyproject.toml ./
 RUN uv sync --no-dev --no-install-project
 
-COPY backend/app ./app
+COPY backend/src/app ./app
 RUN uv sync --no-dev
 
 EXPOSE 8000

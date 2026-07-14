@@ -3,18 +3,17 @@ import logging
 import typing as ty
 import uuid
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
 
 import boto3
 from app.core.database import get_mongo_client
 from app.core.settings import Settings
-from app.models.recipes import RecipeIn, RecipeOut
 from app.routers.users import (
     get_current_user,
     require_admin_or_super_admin,
     require_super_admin,
 )
 from app.routers.users import router as users_router
+from app.routers.recipes import router as recipes_router
 from app.services.user_service import UserService
 from botocore.client import Config
 from botocore.exceptions import BotoCoreError, ClientError
@@ -24,7 +23,6 @@ from pymongo.errors import PyMongoError
 
 log = logging.getLogger(__name__)
 
-SESSIONS = {}
 
 
 def configure_logging() -> None:
@@ -80,6 +78,7 @@ app.add_middleware(
 )
 
 app.include_router(users_router)
+app.include_router(recipes_router)
 
 
 @app.get("/")
@@ -139,44 +138,6 @@ async def system_checks() -> dict[str, ty.Any]:
     checks["ok"] = all(checks[name]["ok"] for name in ["api", "mongo_db", "s3"])
 
     return checks
-
-
-@app.get("/recipes", response_model=list[RecipeOut])
-async def list_recipes() -> list[RecipeOut]:
-    cursor = app.state.db.recipes.find({}, {"_id": 0}).sort("created_at", -1).limit(100)
-
-    recipes = [RecipeOut(**document) async for document in cursor]
-    return recipes
-
-
-@app.post("/recipes", response_model=RecipeOut)
-async def create_recipe(recipe: RecipeIn) -> RecipeOut:
-    now = datetime.now(timezone.utc).isoformat()
-
-    document = {
-        "id": str(uuid.uuid4()),
-        "title": recipe.title,
-        "description": recipe.description,
-        "tags": recipe.tags,
-        "created_at": now,
-    }
-
-    await app.state.db.recipes.insert_one(document)
-
-    return RecipeOut(**document)
-
-
-@app.delete("/recipes/{recipe_id}")
-async def delete_recipe(recipe_id: str) -> dict[str, ty.Any]:
-    result = await app.state.db.recipes.delete_one({"id": recipe_id})
-
-    if result.deleted_count == 0:
-        raise HTTPException(status_code=404, detail="Recipe not found")
-
-    return {
-        "ok": True,
-        "deleted_id": recipe_id,
-    }
 
 
 @app.post("/images/test-upload")
@@ -244,25 +205,3 @@ def test_super_admin_access(
         "message": "You are super-admin",
         "username": current_user["username"],
     }
-
-
-@app.get("/test-access")
-async def test_access(current_user: ty.Annotated[dict, Depends(get_current_user)]):
-    return {"message": "You are authenticated", "username": current_user["username"]}
-
-
-@app.get("/test-admin-access")
-async def test_admin_access(
-    current_user: ty.Annotated[dict, Depends(require_admin_or_super_admin)],
-):
-    return {
-        "message": "You are admin or super-admin",
-        "username": current_user["username"],
-    }
-
-
-@app.get("/test-super-admin-access")
-async def test_super_admin_access(
-    current_user: ty.Annotated[dict, Depends(require_super_admin)],
-):
-    return {"message": "You are super-admin", "username": current_user["username"]}

@@ -3,8 +3,8 @@ import { useAuth } from '../auth/AuthContext';
 
 export function LoginPanel() {
   const { login } = useAuth();
-  const [username, setUsername] = useState('admin');
-  const [password, setPassword] = useState('admin');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -12,12 +12,11 @@ export function LoginPanel() {
     event.preventDefault();
     setBusy(true);
     setError('');
-
     try {
-      await login(username, password);
+      await login(username.trim(), password);
       setPassword('');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unknown error');
+      setError(err instanceof Error ? err.message : 'Unbekannter Fehler');
     } finally {
       setBusy(false);
     }
@@ -26,32 +25,14 @@ export function LoginPanel() {
   return (
     <section className="card auth-panel">
       <div className="auth-panel__header">
-        <div>
-          <p className="eyebrow">Authentication</p>
-          <h2>Login</h2>
-        </div>
-        <span className="auth-token">Not signed in</span>
+        <div><p className="eyebrow">Geschützter Bereich</p><h2>Anmelden</h2></div>
+        <span className="auth-token">Nicht angemeldet</span>
       </div>
-
-      {error && <div className="auth-error">{error}</div>}
-
+      {error && <div className="auth-error" role="alert">{error}</div>}
       <form onSubmit={handleSubmit} className="auth-form auth-form--login">
-        <label>
-          Username
-          <input value={username} onChange={(event) => setUsername(event.target.value)} required />
-        </label>
-        <label>
-          Password
-          <input
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            type="password"
-            required
-          />
-        </label>
-        <button type="submit" disabled={busy}>
-          Login
-        </button>
+        <label>Benutzername<input autoComplete="username" value={username} onChange={(event) => setUsername(event.target.value)} required /></label>
+        <label>Passwort<input autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} type="password" required /></label>
+        <button type="submit" disabled={busy}>{busy ? 'Anmeldung läuft …' : 'Anmelden'}</button>
       </form>
     </section>
   );
