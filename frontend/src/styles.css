@@ -358,6 +358,26 @@ textarea { width: 100%; border: 1px solid #d1d5db; border-radius: 12px; padding:
 .checkbox-label input { width: auto; }
 .instruction-editor { display: grid; gap: 10px; padding-left: 28px; }
 .instruction-editor li { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: start; }
+.import-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(17, 24, 39, 0.5);
+}
+.import-dialog {
+  width: min(760px, 100%);
+  max-height: calc(100vh - 40px);
+  overflow: auto;
+  display: grid;
+  gap: 12px;
+  padding: 18px;
+  border-radius: 16px;
+  background: #ffffff;
+  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.2);
+}
 .label-help { font-weight: 400; color: #6b7280; font-size: 12px; }
 .badge-row { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0; }
 .badge { padding: 4px 8px; border-radius: 999px; background: #e5e7eb; font-size: 12px; }
