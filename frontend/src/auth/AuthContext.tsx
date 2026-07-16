@@ -8,6 +8,7 @@ type AuthContextValue = {
   token: string | null;
   user: UserPublic | null;
   isAuthenticated: boolean;
+  isAdmin: boolean;
   mayManageUsers: boolean;
   login: (username: string, password: string) => Promise<void>;
   logout: () => void;
@@ -73,6 +74,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       token,
       user,
       isAuthenticated: Boolean(token && user),
+      isAdmin: Boolean(user?.is_super_admin || user?.groups.some((group) => group.role === 'admin')),
       mayManageUsers: Boolean(
         user?.is_super_admin || user?.groups.some((group) => group.role === 'admin'),
       ),
