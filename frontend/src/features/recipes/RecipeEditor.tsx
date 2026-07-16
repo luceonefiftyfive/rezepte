@@ -1,5 +1,12 @@
-import { FormEvent, useEffect, useState } from 'react';
-import type { IngredientSection, Recipe, RecipeIngredient, RecipePayload, Unit } from '../../types';
+import { ChangeEvent, FormEvent, useEffect, useState } from 'react';
+import type {
+  ImageUploadResponse,
+  IngredientSection,
+  Recipe,
+  RecipeIngredient,
+  RecipePayload,
+  Unit,
+} from '../../types';
 
 const units: Array<{ value: Unit; label: string }> = [
   { value: 'g', label: 'g' },
@@ -135,7 +142,10 @@ function parseIngredientMarkdown(markdown: string): {
     const unitMatch = findUnitAliasInTokens(tokens);
     if (unitMatch) {
       unit = unitMatch.unit;
-      text = tokens.slice(unitMatch.index + 1).join(' ').trim();
+      text = tokens
+        .slice(unitMatch.index + 1)
+        .join(' ')
+        .trim();
     }
 
     if (amount && unit === 'as_needed') {
@@ -192,6 +202,7 @@ function emptyPayload(): RecipePayload {
   return {
     title: '',
     description: null,
+    recipe_image_key: null,
     group_ids: [],
     tags: [],
     time: { preparation_minutes: null, cooking_minutes: null, resting_minutes: null },
@@ -207,11 +218,19 @@ export function RecipeEditor({
   busy = false,
   onSave,
   onCancel,
+  onUploadRecipeImage,
+  onUploadInstructionImage,
 }: {
   recipe?: Recipe | null;
   busy?: boolean;
   onSave: (payload: RecipePayload, version?: number) => Promise<void>;
   onCancel?: () => void;
+  onUploadRecipeImage?: (recipeId: string, file: File) => Promise<ImageUploadResponse>;
+  onUploadInstructionImage?: (
+    recipeId: string,
+    stepId: string,
+    file: File,
+  ) => Promise<ImageUploadResponse>;
 }) {
   const [form, setForm] = useState<RecipePayload>(() => recipe ?? emptyPayload());
   const [tags, setTags] = useState(recipe?.tags.join(', ') ?? '');
@@ -219,6 +238,10 @@ export function RecipeEditor({
   const [ingredientMarkdown, setIngredientMarkdown] = useState('');
   const [instructionMarkdown, setInstructionMarkdown] = useState('');
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
+  const [uploadError, setUploadError] = useState('');
+  const [uploadStatus, setUploadStatus] = useState('');
+  const [recipeImageUrl, setRecipeImageUrl] = useState<string | null>(null);
+  const [stepImageUrls, setStepImageUrls] = useState<Record<string, string>>({});
 
   useEffect(() => {
     setForm(recipe ?? emptyPayload());
@@ -226,6 +249,10 @@ export function RecipeEditor({
     setGroups(recipe?.group_ids.join(', ') ?? '');
     setIngredientMarkdown('');
     setInstructionMarkdown('');
+    setUploadError('');
+    setUploadStatus('');
+    setRecipeImageUrl(null);
+    setStepImageUrls({});
   }, [recipe]);
 
   function updateSection(sectionIndex: number, section: IngredientSection) {
@@ -280,6 +307,63 @@ export function RecipeEditor({
       instructions: parsed,
     }));
   }
+
+  async function handleRecipeImageUpload(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (!recipe?.id || !onUploadRecipeImage) {
+      setUploadError('Bild-Upload ist erst nach dem ersten Speichern verfügbar.');
+      event.target.value = '';
+      return;
+    }
+
+    setUploadError('');
+    setUploadStatus('');
+    try {
+      const uploaded = await onUploadRecipeImage(recipe.id, file);
+      setForm((current) => ({ ...current, recipe_image_key: uploaded.key }));
+      setRecipeImageUrl(uploaded.view_url ?? null);
+      setUploadStatus('Rezeptbild wurde hochgeladen.');
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : 'Unbekannter Fehler');
+    } finally {
+      event.target.value = '';
+    }
+  }
+
+  async function handleInstructionImageUpload(
+    stepId: string,
+    event: ChangeEvent<HTMLInputElement>,
+  ) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (!recipe?.id || !onUploadInstructionImage) {
+      setUploadError('Bild-Upload ist erst nach dem ersten Speichern verfügbar.');
+      event.target.value = '';
+      return;
+    }
+
+    setUploadError('');
+    setUploadStatus('');
+    try {
+      const uploaded = await onUploadInstructionImage(recipe.id, stepId, file);
+      setForm((current) => ({
+        ...current,
+        instructions: current.instructions.map((step) =>
+          step.id === stepId ? { ...step, image_key: uploaded.key } : step,
+        ),
+      }));
+      if (uploaded.view_url) {
+        setStepImageUrls((current) => ({ ...current, [stepId]: uploaded.view_url as string }));
+      }
+      setUploadStatus('Schrittbild wurde hochgeladen.');
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : 'Unbekannter Fehler');
+    } finally {
+      event.target.value = '';
+    }
+  }
+
   async function submit(event: FormEvent) {
     event.preventDefault();
     const payload: RecipePayload = {
@@ -310,7 +394,7 @@ export function RecipeEditor({
       })),
       instructions: form.instructions
         .filter((step) => step.text.trim())
-        .map((step) => ({ ...step, text: step.text.trim() })),
+        .map((step) => ({ ...step, text: step.text.trim(), image_key: step.image_key ?? null })),
     };
     await onSave(payload, recipe?.version);
     if (!recipe) {
@@ -325,7 +409,11 @@ export function RecipeEditor({
       <div className="section-heading compact">
         <h3>{recipe ? 'Rezept bearbeiten' : 'Neues Rezept'}</h3>
         <div className="button-row">
-          <button type="button" className="button-secondary" onClick={() => setIsImportDialogOpen(true)}>
+          <button
+            type="button"
+            className="button-secondary"
+            onClick={() => setIsImportDialogOpen(true)}
+          >
             Markdown importieren
           </button>
           {recipe && onCancel && (
@@ -338,16 +426,28 @@ export function RecipeEditor({
 
       {isImportDialogOpen && (
         <div className="import-dialog-backdrop" role="presentation">
-          <div className="import-dialog" role="dialog" aria-modal="true" aria-labelledby="import-dialog-title">
+          <div
+            className="import-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="import-dialog-title"
+          >
             <div className="section-heading compact">
               <h4 id="import-dialog-title">Markdown-Import</h4>
-              <button type="button" className="button-secondary" onClick={() => setIsImportDialogOpen(false)}>
+              <button
+                type="button"
+                className="button-secondary"
+                onClick={() => setIsImportDialogOpen(false)}
+              >
                 Schließen
               </button>
             </div>
             <label>
               Zutaten als Markdown
-              <span className="label-help">Listen mit <code>-</code> oder <code>1.</code>; z. B. auch <code>300g</code> oder <code>6EL</code>.</span>
+              <span className="label-help">
+                Listen mit <code>-</code> oder <code>1.</code>; z. B. auch <code>300g</code> oder{' '}
+                <code>6EL</code>.
+              </span>
               <textarea
                 aria-label="Zutaten (Markdown)"
                 rows={8}
@@ -357,7 +457,9 @@ export function RecipeEditor({
             </label>
             <label>
               Arbeitsschritte als Markdown
-              <span className="label-help">Listen mit <code>-</code> oder nummeriert.</span>
+              <span className="label-help">
+                Listen mit <code>-</code> oder nummeriert.
+              </span>
               <textarea
                 aria-label="Arbeitsschritte (Markdown)"
                 rows={8}
@@ -366,10 +468,18 @@ export function RecipeEditor({
               />
             </label>
             <div className="button-row">
-              <button type="button" className="button-secondary" onClick={importIngredientsFromMarkdown}>
+              <button
+                type="button"
+                className="button-secondary"
+                onClick={importIngredientsFromMarkdown}
+              >
                 Nur Zutaten importieren
               </button>
-              <button type="button" className="button-secondary" onClick={importInstructionsFromMarkdown}>
+              <button
+                type="button"
+                className="button-secondary"
+                onClick={importInstructionsFromMarkdown}
+              >
                 Nur Schritte importieren
               </button>
               <button type="button" onClick={importFromMarkdown}>
@@ -377,6 +487,16 @@ export function RecipeEditor({
               </button>
             </div>
           </div>
+        </div>
+      )}
+      {uploadStatus && (
+        <div className="auth-status" role="status">
+          {uploadStatus}
+        </div>
+      )}
+      {uploadError && (
+        <div className="auth-error" role="alert">
+          {uploadError}
         </div>
       )}
       <label>
@@ -398,6 +518,26 @@ export function RecipeEditor({
           onChange={(e) => setForm({ ...form, description: e.target.value })}
         />
       </label>
+      <div className="editor-block">
+        <div className="section-heading compact">
+          <h4>Rezeptbild</h4>
+        </div>
+        <input
+          type="file"
+          accept="image/*"
+          onChange={handleRecipeImageUpload}
+          disabled={busy || !recipe || !onUploadRecipeImage}
+        />
+        {form.recipe_image_key && <p className="muted">Key: {form.recipe_image_key}</p>}
+        {recipeImageUrl && (
+          <img className="instruction-preview" src={recipeImageUrl} alt="Rezeptbild" />
+        )}
+        {!recipe && (
+          <p className="label-help">
+            Für neue Rezepte zuerst einmal speichern, dann Bilder hochladen.
+          </p>
+        )}
+      </div>
       <div className="form-grid three">
         <label>
           Rezeptbücher <span className="label-help">IDs, mit Komma getrennt</span>
@@ -611,20 +751,36 @@ export function RecipeEditor({
         <ol className="instruction-editor">
           {form.instructions.map((step, index) => (
             <li key={step.id}>
-              <textarea
-                aria-label={`Zubereitungsschritt ${index + 1}`}
-                required={form.instructions.length === 1}
-                rows={2}
-                value={step.text}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    instructions: form.instructions.map((value, i) =>
-                      i === index ? { ...value, text: e.target.value } : value,
-                    ),
-                  })
-                }
-              />
+              <div className="instruction-fields">
+                <textarea
+                  aria-label={`Zubereitungsschritt ${index + 1}`}
+                  required={form.instructions.length === 1}
+                  rows={2}
+                  value={step.text}
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      instructions: form.instructions.map((value, i) =>
+                        i === index ? { ...value, text: e.target.value } : value,
+                      ),
+                    })
+                  }
+                />
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(event) => void handleInstructionImageUpload(step.id, event)}
+                  disabled={busy || !recipe || !onUploadInstructionImage}
+                />
+                {step.image_key && <p className="muted">Key: {step.image_key}</p>}
+                {stepImageUrls[step.id] && (
+                  <img
+                    className="instruction-preview"
+                    src={stepImageUrls[step.id]}
+                    alt={`Schrittbild ${index + 1}`}
+                  />
+                )}
+              </div>
               <button
                 type="button"
                 className="button-danger button-small"
