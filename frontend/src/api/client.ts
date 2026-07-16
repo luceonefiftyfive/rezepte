@@ -1,4 +1,4 @@
-const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '/api';
+export const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '/api';
 
 async function readResponseError(response: Response): Promise<string> {
   try {
@@ -38,4 +38,17 @@ export async function apiFetch<T>(
   const contentType = response.headers.get('content-type') ?? '';
   if (!contentType.includes('application/json')) return undefined as T;
   return response.json() as Promise<T>;
+}
+
+export async function apiFetchText(
+  path: string,
+  options: RequestInit = {},
+  token?: string | null,
+): Promise<string> {
+  const headers = new Headers(options.headers);
+  if (token) headers.set('Authorization', `Bearer ${token}`);
+
+  const response = await fetch(`${API_BASE}${path}`, { ...options, headers });
+  if (!response.ok) throw new Error(await readResponseError(response));
+  return response.text();
 }
