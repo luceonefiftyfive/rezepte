@@ -1,17 +1,39 @@
 from unittest.mock import Mock
+from urllib.parse import urlsplit
 
 import pytest
 from app.main import app, settings
 from botocore.exceptions import ClientError
 
 
+class _FakeS3Body:
+    def __init__(self, content: bytes) -> None:
+        self._content = content
+
+    def read(self) -> bytes:
+        return self._content
+
+
 class FakeS3Client:
     def __init__(self) -> None:
         self.head_bucket = Mock(return_value={})
-        self.put_object = Mock(return_value={"ETag": "test-etag"})
-        self.generate_presigned_url = Mock(
-            side_effect=lambda *_args, **kwargs: f"https://signed.local/{kwargs['Params']['Key']}?exp={kwargs['ExpiresIn']}"
-        )
+        self.objects: dict[str, dict[str, object]] = {}
+        self.put_object = Mock(side_effect=self._put_object)
+        self.get_object = Mock(side_effect=self._get_object)
+
+    def _put_object(self, *, Bucket, Key, Body, ContentType):
+        self.objects[Key] = {"Body": Body, "ContentType": ContentType, "Bucket": Bucket}
+        return {"ETag": "test-etag"}
+
+    def _get_object(self, *, Bucket, Key):
+        if Key not in self.objects:
+            error_response = {"Error": {"Code": "NoSuchKey", "Message": "Not Found"}}
+            raise ClientError(error_response, "GetObject")
+        stored = self.objects[Key]
+        return {
+            "Body": _FakeS3Body(stored["Body"]),
+            "ContentType": stored["ContentType"],
+        }
 
 
 @pytest.fixture(autouse=True)
@@ -208,6 +230,21 @@ async def test_recipe_admin_export_import_and_purge(client):
     admin_token = await _login_token(client)
     headers = {"Authorization": f"Bearer {admin_token}"}
 
+    cover_key = "recipes/export-test/cover.jpg"
+    step_key = "recipes/export-test/steps/step-1/detail.png"
+    app.state.s3_client.put_object(
+        Bucket=settings.s3_bucket,
+        Key=cover_key,
+        Body=b"cover-bytes",
+        ContentType="image/jpeg",
+    )
+    app.state.s3_client.put_object(
+        Bucket=settings.s3_bucket,
+        Key=step_key,
+        Body=b"step-bytes",
+        ContentType="image/png",
+    )
+
     payload = {
         "title": "Kartoffelsuppe",
         "description": "Ein Familienrezept",
@@ -219,6 +256,7 @@ async def test_recipe_admin_export_import_and_purge(client):
             "resting_minutes": 0,
         },
         "yield": {"amount": "4", "unit": "Portionen"},
+        "recipe_image_key": cover_key,
         "ingredient_sections": [
             {
                 "id": "main",
@@ -234,7 +272,9 @@ async def test_recipe_admin_export_import_and_purge(client):
                 ],
             }
         ],
-        "instructions": [{"id": "step-1", "text": "Alles kochen."}],
+        "instructions": [
+            {"id": "step-1", "text": "Alles kochen.", "image_key": step_key}
+        ],
         "remarks": None,
     }
 
@@ -248,6 +288,11 @@ async def test_recipe_admin_export_import_and_purge(client):
     assert yaml_export.status_code == 200
     assert "recipes:" in yaml_export.text
     assert "Kartoffelsuppe" in yaml_export.text
+    assert "images:" in yaml_export.text
+    assert cover_key in yaml_export.text
+    assert step_key in yaml_export.text
+
+    app.state.s3_client.objects.clear()
 
     purge_group = await client.delete(
         "/recipes/admin/purge?group_id=family",
@@ -275,6 +320,8 @@ async def test_recipe_admin_export_import_and_purge(client):
     )
     assert import_yaml.status_code == 200
     assert import_yaml.json()["imported"] == 1
+    assert cover_key in app.state.s3_client.objects
+    assert step_key in app.state.s3_client.objects
 
     markdown_export = await client.get(
         "/recipes/admin/export?format=markdown",
@@ -446,6 +493,8 @@ async def test_recipe_scoped_image_upload_and_view_url(client):
     cover = upload_cover.json()
     assert cover["key"].startswith(f"recipes/{recipe['id']}/cover/")
     assert "view_url" in cover
+    assert cover["view_url"].startswith(f"{settings.app_base_url}/api/recipes/images/")
+    assert "minio:9000" not in cover["view_url"]
 
     upload_step = await client.post(
         f"/recipes/{recipe['id']}/instructions/step-1/image/upload",
@@ -455,6 +504,8 @@ async def test_recipe_scoped_image_upload_and_view_url(client):
     step = upload_step.json()
     assert step["key"].startswith(f"recipes/{recipe['id']}/steps/step-1/")
     assert "view_url" in step
+    assert step["view_url"].startswith(f"{settings.app_base_url}/api/recipes/images/")
+    assert "minio:9000" not in step["view_url"]
 
     update = await client.put(
         f"/recipes/{recipe['id']}",
@@ -471,9 +522,18 @@ async def test_recipe_scoped_image_upload_and_view_url(client):
     cover_url = await client.get(f"/recipes/{recipe['id']}/image-url")
     assert cover_url.status_code == 200
     assert cover_url.json()["key"] == cover["key"]
+    assert cover_url.json()["view_url"] == cover["view_url"]
+
+    streamed_cover = await client.get(
+        urlsplit(cover["view_url"]).path.removeprefix("/api")
+    )
+    assert streamed_cover.status_code == 200
+    assert streamed_cover.headers["content-type"] == "image/jpeg"
+    assert streamed_cover.content == b"jpeg-content"
 
     step_url = await client.get(
         f"/recipes/{recipe['id']}/instructions/step-1/image-url"
     )
     assert step_url.status_code == 200
     assert step_url.json()["key"] == step["key"]
+    assert step_url.json()["view_url"] == step["view_url"]

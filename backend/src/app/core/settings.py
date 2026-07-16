@@ -7,6 +7,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     app_name: str = "Rezepte API"
     mode: str = "development"
+    app_base_url: str = "http://localhost:8080"
     cors_origins: list[str] = ["*"]
     rezepte_test: bool = False
 

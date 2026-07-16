@@ -1,3 +1,4 @@
+import base64
 import re
 import uuid
 from datetime import datetime, timezone
@@ -7,6 +8,7 @@ import yaml
 from app.models.recipes import (
     RecipeCreate,
     RecipeExportFormat,
+    RecipeExportImage,
     RecipeExportPayload,
     RecipeImportPreviewResult,
     RecipeImportResult,
@@ -14,12 +16,20 @@ from app.models.recipes import (
     RecipeUpdate,
 )
 from app.repositories.recipe_repository import RecipeRepository
+from app.services.image_service import ImageService
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
 
 class RecipeService:
-    def __init__(self, db: AsyncIOMotorDatabase):
+    def __init__(
+        self,
+        db: AsyncIOMotorDatabase,
+        s3_client: Any | None = None,
+        settings: Any | None = None,
+    ):
         self.repository = RecipeRepository(db)
+        self.s3_client = s3_client
+        self.settings = settings
 
     @staticmethod
     def _to_output(document: dict[str, Any]) -> RecipeOut:
@@ -68,12 +78,14 @@ class RecipeService:
             sort=[("updated_at", -1)],
         )
         recipes = [self._to_output(document) for document in documents]
+        images = await self._build_export_images(recipes)
         return RecipeExportPayload(
             export_schema="rezepte.recipes.export.v1",
             exported_at=datetime.now(timezone.utc),
             count=len(recipes),
             filters={"group_id": group_id},
             recipes=recipes,
+            images=images,
         )
 
     async def export_recipes(
@@ -113,7 +125,9 @@ class RecipeService:
         content: str,
         import_format: RecipeExportFormat,
     ) -> RecipeImportResult:
-        documents = self._collect_import_documents(content, import_format)
+        parsed_payload = self._parse_import_payload(content, import_format)
+        await self._restore_import_images(parsed_payload)
+        documents = self._collect_import_documents(parsed_payload)
         created = 0
         updated = 0
 
@@ -135,7 +149,8 @@ class RecipeService:
         content: str,
         import_format: RecipeExportFormat,
     ) -> RecipeImportPreviewResult:
-        documents = self._collect_import_documents(content, import_format)
+        parsed_payload = self._parse_import_payload(content, import_format)
+        documents = self._collect_import_documents(parsed_payload)
         simulated_existing_ids: set[str] = set()
         would_create = 0
         would_update = 0
@@ -182,6 +197,68 @@ class RecipeService:
             raise ValueError("Import content must describe an object at top level")
         return parsed
 
+    def _require_image_service(self) -> ImageService:
+        if self.s3_client is None or self.settings is None:
+            raise RuntimeError("Image export/import requires S3 dependencies")
+        return ImageService(self.s3_client, self.settings)
+
+    async def _build_export_images(
+        self, recipes: list[RecipeOut]
+    ) -> dict[str, RecipeExportImage]:
+        image_keys: set[str] = set()
+        for recipe in recipes:
+            if recipe.recipe_image_key:
+                image_keys.add(recipe.recipe_image_key)
+            for step in recipe.instructions:
+                if step.image_key:
+                    image_keys.add(step.image_key)
+
+        if not image_keys:
+            return {}
+
+        image_service = self._require_image_service()
+        images: dict[str, RecipeExportImage] = {}
+        for key in sorted(image_keys):
+            downloaded = await image_service.download_image(key)
+            images[key] = RecipeExportImage(
+                content_type=downloaded.content_type,
+                data=base64.b64encode(downloaded.content).decode("ascii"),
+            )
+        return images
+
+    async def _restore_import_images(self, parsed_payload: dict[str, Any]) -> None:
+        raw_images = parsed_payload.get("images", {})
+        if raw_images is None:
+            return
+        if not isinstance(raw_images, dict):
+            raise ValueError("Import content contains invalid 'images' data")
+        if not raw_images:
+            return
+
+        image_service = self._require_image_service()
+        for key, raw_image in raw_images.items():
+            if not isinstance(key, str) or not isinstance(raw_image, dict):
+                raise ValueError(
+                    "Each exported image must be an object keyed by its storage key"
+                )
+            content_type = raw_image.get("content_type")
+            data = raw_image.get("data")
+            if not isinstance(content_type, str) or not content_type:
+                raise ValueError(
+                    f"Exported image {key} is missing a valid content_type"
+                )
+            if not isinstance(data, str) or not data:
+                raise ValueError(f"Exported image {key} is missing image data")
+            try:
+                content = base64.b64decode(data, validate=True)
+            except ValueError as exc:
+                raise ValueError(
+                    f"Exported image {key} is not valid base64 data"
+                ) from exc
+            await image_service.restore_image(
+                key=key, content=content, content_type=content_type
+            )
+
     def _normalize_import_recipe(self, raw_recipe: dict[str, Any]) -> dict[str, Any]:
         if "id" in raw_recipe:
             parsed = RecipeOut.model_validate(raw_recipe)
@@ -201,10 +278,8 @@ class RecipeService:
 
     def _collect_import_documents(
         self,
-        content: str,
-        import_format: RecipeExportFormat,
+        parsed_payload: dict[str, Any],
     ) -> list[dict[str, Any]]:
-        parsed_payload = self._parse_import_payload(content, import_format)
         recipes = parsed_payload.get("recipes")
 
         if not isinstance(recipes, list):

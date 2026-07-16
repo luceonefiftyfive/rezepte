@@ -114,13 +114,13 @@ describe('RecipeSection', () => {
       .mockResolvedValueOnce({
         ok: true,
         key: 'recipes/recipe-1/cover/cover.jpg',
-        view_url: 'https://signed.local/cover.jpg',
+        view_url: 'https://nuc01/api/recipes/images/recipes/recipe-1/cover/cover.jpg',
         expires_in: 3600,
       })
       .mockResolvedValueOnce({
         ok: true,
         key: 'recipes/recipe-1/steps/step-1/step.jpg',
-        view_url: 'https://signed.local/step.jpg',
+        view_url: 'https://nuc01/api/recipes/images/recipes/recipe-1/steps/step-1/step.jpg',
         expires_in: 3600,
       });
 
@@ -129,17 +129,17 @@ describe('RecipeSection', () => {
 
     await waitFor(() => {
       const previewImage = screen.getByAltText('Vorschaubild Brot') as HTMLImageElement;
-      expect(previewImage.src).toContain('https://signed.local/cover.jpg');
+      expect(previewImage.src).toContain('/api/recipes/images/recipes/recipe-1/cover/cover.jpg');
     });
 
     fireEvent.click(screen.getByRole('button', { name: /Anzeigen/i }));
 
     await waitFor(() => {
       const recipeImage = screen.getByAltText('Rezeptbild Brot') as HTMLImageElement;
-      expect(recipeImage.src).toContain('https://signed.local/cover.jpg');
+      expect(recipeImage.src).toContain('/api/recipes/images/recipes/recipe-1/cover/cover.jpg');
     });
 
     const stepImage = screen.getByAltText('Schrittbild Brot') as HTMLImageElement;
-    expect(stepImage.src).toContain('https://signed.local/step.jpg');
+    expect(stepImage.src).toContain('/api/recipes/images/recipes/recipe-1/steps/step-1/step.jpg');
   });
 });

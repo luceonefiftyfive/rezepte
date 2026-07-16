@@ -15,11 +15,17 @@ from app.routers.users import require_admin_or_super_admin
 from app.services.image_service import ImageService
 from app.services.recipe_service import RecipeService
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import PlainTextResponse, Response
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
 router = APIRouter(prefix="/recipes", tags=["recipes"])
 settings = Settings()
+
+
+def _recipe_image_url(request: Request, key: str) -> str:
+    base_url = settings.app_base_url.rstrip("/")
+    image_key = key.lstrip("/")
+    return f"{base_url}/api/recipes/images/{image_key}"
 
 
 @router.get("", response_model=list[RecipeOut])
@@ -32,11 +38,12 @@ async def list_recipes(
 @router.get("/admin/export", response_class=PlainTextResponse)
 async def export_recipes(
     db: Annotated[AsyncIOMotorDatabase, Depends(get_db)],
+    request: Request,
     _: Annotated[dict, Depends(require_admin_or_super_admin)],
     format: RecipeExportFormat = RecipeExportFormat.YAML,
     group_id: str | None = None,
 ) -> str:
-    service = RecipeService(db)
+    service = RecipeService(db, request.app.state.s3_client, settings)
     return await service.export_recipes(export_format=format, group_id=group_id)
 
 
@@ -54,10 +61,13 @@ async def purge_recipes(
 async def preview_import_recipes(
     payload: RecipeImportRequest,
     db: Annotated[AsyncIOMotorDatabase, Depends(get_db)],
+    request: Request,
     _: Annotated[dict, Depends(require_admin_or_super_admin)],
 ) -> RecipeImportPreviewResult:
     try:
-        return await RecipeService(db).preview_import_recipes(
+        return await RecipeService(
+            db, request.app.state.s3_client, settings
+        ).preview_import_recipes(
             content=payload.content,
             import_format=payload.format,
         )
@@ -69,10 +79,13 @@ async def preview_import_recipes(
 async def import_recipes(
     payload: RecipeImportRequest,
     db: Annotated[AsyncIOMotorDatabase, Depends(get_db)],
+    request: Request,
     _: Annotated[dict, Depends(require_admin_or_super_admin)],
 ) -> RecipeImportResult:
     try:
-        return await RecipeService(db).import_recipes(
+        return await RecipeService(
+            db, request.app.state.s3_client, settings
+        ).import_recipes(
             content=payload.content,
             import_format=payload.format,
         )
@@ -150,8 +163,7 @@ async def upload_recipe_image(
         "key": uploaded.key,
         "size": uploaded.size,
         "content_type": uploaded.content_type,
-        "view_url": uploaded.view_url,
-        "expires_in": uploaded.expires_in,
+        "view_url": _recipe_image_url(request, uploaded.key),
     }
 
 
@@ -180,9 +192,19 @@ async def upload_instruction_image(
         "key": uploaded.key,
         "size": uploaded.size,
         "content_type": uploaded.content_type,
-        "view_url": uploaded.view_url,
-        "expires_in": uploaded.expires_in,
+        "view_url": _recipe_image_url(request, uploaded.key),
     }
+
+
+@router.get("/images/{key:path}", name="stream_recipe_image")
+async def stream_recipe_image(
+    key: str,
+    request: Request,
+) -> Response:
+    downloaded = await ImageService(
+        request.app.state.s3_client, settings
+    ).download_image(key)
+    return Response(content=downloaded.content, media_type=downloaded.content_type)
 
 
 @router.get("/{recipe_id}/image-url")
@@ -197,18 +219,11 @@ async def get_recipe_image_url(
     if not recipe.recipe_image_key:
         raise HTTPException(status_code=404, detail="Recipe image not found")
 
-    expires_in = 60 * 60 * 24
-    view_url = await ImageService(
-        request.app.state.s3_client, settings
-    ).create_view_url(
-        recipe.recipe_image_key,
-        expires_in=expires_in,
-    )
+    view_url = _recipe_image_url(request, recipe.recipe_image_key)
     return {
         "ok": True,
         "key": recipe.recipe_image_key,
         "view_url": view_url,
-        "expires_in": expires_in,
     }
 
 
@@ -229,16 +244,9 @@ async def get_instruction_image_url(
     if not step.image_key:
         raise HTTPException(status_code=404, detail="Instruction image not found")
 
-    expires_in = 60 * 60 * 24
-    view_url = await ImageService(
-        request.app.state.s3_client, settings
-    ).create_view_url(
-        step.image_key,
-        expires_in=expires_in,
-    )
+    view_url = _recipe_image_url(request, step.image_key)
     return {
         "ok": True,
         "key": step.image_key,
         "view_url": view_url,
-        "expires_in": expires_in,
     }
