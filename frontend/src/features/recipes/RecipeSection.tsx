@@ -31,18 +31,6 @@ function getIngredientUnitLabel(unit: Unit, customUnit?: string | null): string 
   return unitLabels[unit] ?? unit;
 }
 
-function formatDate(value: string): string {
-  const date = new Date(value);
-  return Number.isNaN(date.getTime())
-    ? value
-    : new Intl.DateTimeFormat('de-DE', { dateStyle: 'medium', timeStyle: 'short' }).format(date);
-}
-function formatIngredient(recipe: Recipe): string {
-  return recipe.ingredient_sections
-    .flatMap((section) => section.ingredients.map((item) => item.name))
-    .join(', ');
-}
-
 export function RecipeSection() {
   const { token } = useAuth();
   const [recipes, setRecipes] = useState<Recipe[]>([]);
@@ -346,7 +334,7 @@ export function RecipeSection() {
         {visibleRecipes.length === 0 ? (
           <p>Keine passenden Rezepte vorhanden.</p>
         ) : (
-          <ul className="recipe-list">
+          <ul className="recipe-overview-grid">
             {visibleRecipes.map((recipe) => {
               const previewImageUrl =
                 recipe.recipe_image_key &&
@@ -355,55 +343,27 @@ export function RecipeSection() {
                   : null;
 
               return (
-                <li key={recipe.id} className="recipe-card">
-                  <article>
+                <li key={recipe.id}>
+                  <button
+                    type="button"
+                    className={
+                      selectedRecipe?.id === recipe.id ? 'recipe-overview-tile active' : 'recipe-overview-tile'
+                    }
+                    onClick={() => openRecipeDetail(recipe)}
+                  >
                     {previewImageUrl && (
                       <img
-                        className="recipe-list-thumb"
+                        className="recipe-overview-image"
                         src={previewImageUrl}
                         alt={`Vorschaubild ${recipe.title}`}
                         loading="lazy"
                       />
                     )}
-                    <header className="recipe-card-header">
-                      <h3>{recipe.title}</h3>
-                      <small className="muted">
-                        Aktualisiert: {formatDate(recipe.updated_at)} · Version {recipe.version}
-                      </small>
-                    </header>
-                    {recipe.description && <p>{recipe.description}</p>}
-                    <div className="badge-row">
-                      {recipe.tags.map((tag) => (
-                        <span className="badge" key={tag}>
-                          {tag}
-                        </span>
-                      ))}
-                    </div>
-                    <div className="recipe-card-meta">
-                      <span>{formatIngredient(recipe) || 'keine Zutaten'}</span>
-                      <span>{recipe.instructions.length} Schritte</span>
-                    </div>
-                  </article>
-                  <div className="recipe-card-actions">
-                    <button type="button" onClick={() => openRecipeDetail(recipe)}>
-                      Anzeigen
-                    </button>
-                    <button
-                      type="button"
-                      className="button-secondary"
-                      onClick={() => openRecipeEditor(recipe)}
-                    >
-                      Bearbeiten
-                    </button>
-                    <button
-                      className="button-danger"
-                      type="button"
-                      disabled={busy}
-                      onClick={() => void deleteRecipe(recipe)}
-                    >
-                      Löschen
-                    </button>
-                  </div>
+                    {!previewImageUrl && (
+                      <div className="recipe-overview-image recipe-overview-image--placeholder" aria-hidden="true" />
+                    )}
+                    <span className="recipe-overview-title">{recipe.title}</span>
+                  </button>
                 </li>
               );
             })}
@@ -417,13 +377,23 @@ export function RecipeSection() {
               <h3>Rezept ansehen</h3>
               <p className="muted">{selectedRecipe.title}</p>
             </div>
-            <button
-              type="button"
-              className="button-secondary"
-              onClick={() => openRecipeEditor(selectedRecipe)}
-            >
-              Bearbeiten
-            </button>
+            <div className="button-row">
+              <button
+                type="button"
+                className="button-secondary"
+                onClick={() => openRecipeEditor(selectedRecipe)}
+              >
+                Bearbeiten
+              </button>
+              <button
+                className="button-danger"
+                type="button"
+                disabled={busy}
+                onClick={() => void deleteRecipe(selectedRecipe)}
+              >
+                Löschen
+              </button>
+            </div>
           </div>
           {selectedRecipe.description && <p>{selectedRecipe.description}</p>}
           {recipeImageUrl && (
