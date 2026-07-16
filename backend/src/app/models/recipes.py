@@ -148,12 +148,18 @@ class RecipeImportPreviewResult(BaseModel):
     would_update: int
 
 
+class RecipeExportImage(BaseModel):
+    content_type: str = Field(min_length=1, max_length=120)
+    data: str = Field(min_length=1)
+
+
 class RecipeExportPayload(BaseModel):
     export_schema: str = Field(alias="schema")
     exported_at: datetime
     count: int
     filters: dict[str, Any]
     recipes: list[RecipeOut]
+    images: dict[str, RecipeExportImage] = Field(default_factory=dict)
 
     model_config = {"populate_by_name": True}
 

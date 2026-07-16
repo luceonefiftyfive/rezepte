@@ -13,8 +13,13 @@ class UploadedImage:
     key: str
     size: int
     content_type: str
-    view_url: str
-    expires_in: int
+
+
+@dataclass(frozen=True)
+class DownloadedImage:
+    key: str
+    content: bytes
+    content_type: str
 
 
 class ImageService:
@@ -35,7 +40,6 @@ class ImageService:
         file: UploadFile,
         key_prefix: str,
         max_size_bytes: int = 10 * 1024 * 1024,
-        url_expires_in: int = 60 * 60 * 24,
     ) -> UploadedImage:
         if not file.content_type or not file.content_type.startswith("image/"):
             raise HTTPException(status_code=400, detail="Only image files are allowed")
@@ -59,12 +63,6 @@ class ImageService:
                 Body=content,
                 ContentType=file.content_type,
             )
-            view_url = await asyncio.to_thread(
-                self.s3_client.generate_presigned_url,
-                "get_object",
-                Params={"Bucket": self.settings.s3_bucket, "Key": object_key},
-                ExpiresIn=url_expires_in,
-            )
         except (BotoCoreError, ClientError) as exc:
             raise HTTPException(status_code=500, detail=str(exc)) from exc
 
@@ -72,17 +70,35 @@ class ImageService:
             key=object_key,
             size=len(content),
             content_type=file.content_type,
-            view_url=view_url,
-            expires_in=url_expires_in,
         )
 
-    async def create_view_url(self, key: str, expires_in: int = 60 * 60 * 24) -> str:
+    async def download_image(self, key: str) -> DownloadedImage:
         try:
-            return await asyncio.to_thread(
-                self.s3_client.generate_presigned_url,
-                "get_object",
-                Params={"Bucket": self.settings.s3_bucket, "Key": key},
-                ExpiresIn=expires_in,
+            response = await asyncio.to_thread(
+                self.s3_client.get_object,
+                Bucket=self.settings.s3_bucket,
+                Key=key,
+            )
+            content = await asyncio.to_thread(response["Body"].read)
+        except (BotoCoreError, ClientError) as exc:
+            raise HTTPException(status_code=404, detail="Image not found") from exc
+
+        return DownloadedImage(
+            key=key,
+            content=content,
+            content_type=response.get("ContentType") or "application/octet-stream",
+        )
+
+    async def restore_image(
+        self, *, key: str, content: bytes, content_type: str
+    ) -> None:
+        try:
+            await asyncio.to_thread(
+                self.s3_client.put_object,
+                Bucket=self.settings.s3_bucket,
+                Key=key,
+                Body=content,
+                ContentType=content_type,
             )
         except (BotoCoreError, ClientError) as exc:
             raise HTTPException(status_code=500, detail=str(exc)) from exc
