@@ -1,8 +1,29 @@
 import { ChangeEvent, useEffect, useMemo, useState } from 'react';
 import { apiFetch } from '../../api/client';
 import { useAuth } from '../../auth/AuthContext';
-import type { ImageUploadResponse, Recipe, RecipePayload } from '../../types';
+import type { ImageUploadResponse, Recipe, RecipePayload, Unit } from '../../types';
 import { RecipeEditor } from './RecipeEditor';
+
+const unitLabels: Record<Exclude<Unit, 'custom'>, string> = {
+  g: 'g',
+  kg: 'kg',
+  ml: 'ml',
+  l: 'l',
+  tsp: 'TL',
+  tbsp: 'EL',
+  piece: 'Stück',
+  pinch: 'Prise',
+  bunch: 'Bund',
+  clove: 'Zehe',
+  slice: 'Scheibe',
+  cup: 'Tasse',
+  as_needed: 'nach Bedarf',
+};
+
+function getIngredientUnitLabel(unit: Unit, customUnit?: string | null): string {
+  if (unit === 'custom') return customUnit?.trim() ?? '';
+  return unitLabels[unit] ?? unit;
+}
 
 function formatDate(value: string): string {
   const date = new Date(value);
@@ -293,10 +314,10 @@ export function RecipeSection() {
               <ul>
                 {section.ingredients.map((ingredient, index) => (
                   <li key={`${section.id}-${index}`}>
-                    <strong>{ingredient.name}</strong>
                     {ingredient.amount
-                      ? ` — ${ingredient.amount} ${ingredient.unit === 'custom' ? (ingredient.custom_unit ?? '') : ingredient.unit}`
+                      ? `${ingredient.amount} ${getIngredientUnitLabel(ingredient.unit, ingredient.custom_unit)} `
                       : ''}
+                    <strong>{ingredient.name}</strong>
                     {ingredient.preparation ? `, ${ingredient.preparation}` : ''}
                     {ingredient.optional ? ' (optional)' : ''}
                     {ingredient.remarks ? ` — ${ingredient.remarks}` : ''}
