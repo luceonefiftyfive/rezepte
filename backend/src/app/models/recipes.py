@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from decimal import Decimal
 from enum import StrEnum
+from typing import Any
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -120,6 +121,38 @@ class RecipeOut(RecipeBase):
     created_at: datetime
     updated_at: datetime
     version: int
+
+
+class RecipeExportFormat(StrEnum):
+    YAML = "yaml"
+    MARKDOWN = "markdown"
+
+
+class RecipeImportRequest(BaseModel):
+    format: RecipeExportFormat = RecipeExportFormat.YAML
+    content: str = Field(min_length=1)
+
+
+class RecipeImportResult(BaseModel):
+    imported: int
+    created: int
+    updated: int
+
+
+class RecipeImportPreviewResult(BaseModel):
+    imported: int
+    would_create: int
+    would_update: int
+
+
+class RecipeExportPayload(BaseModel):
+    export_schema: str = Field(alias="schema")
+    exported_at: datetime
+    count: int
+    filters: dict[str, Any]
+    recipes: list[RecipeOut]
+
+    model_config = {"populate_by_name": True}
 
 
 # Compatibility alias for older imports.

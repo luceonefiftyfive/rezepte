@@ -1,10 +1,8 @@
-from types import SimpleNamespace
-from unittest.mock import AsyncMock, Mock
+from unittest.mock import Mock
 
 import pytest
-from botocore.exceptions import ClientError
-
 from app.main import app, settings
+from botocore.exceptions import ClientError
 
 
 class FakeS3Client:
@@ -192,6 +190,167 @@ async def test_recipe_validation(client):
         },
     )
     assert duplicate_steps.status_code == 422
+
+
+async def _login_token(client, username="admin", password="admin-password") -> str:
+    response = await client.post(
+        "/auth/login", json={"username": username, "password": password}
+    )
+    assert response.status_code == 200, response.text
+    return response.json()["access_token"]
+
+
+@pytest.mark.anyio
+async def test_recipe_admin_export_import_and_purge(client):
+    admin_token = await _login_token(client)
+    headers = {"Authorization": f"Bearer {admin_token}"}
+
+    payload = {
+        "title": "Kartoffelsuppe",
+        "description": "Ein Familienrezept",
+        "group_ids": ["family"],
+        "tags": ["Suppe"],
+        "time": {
+            "preparation_minutes": 20,
+            "cooking_minutes": 40,
+            "resting_minutes": 0,
+        },
+        "yield": {"amount": "4", "unit": "Portionen"},
+        "ingredient_sections": [
+            {
+                "id": "main",
+                "name": "Für die Suppe",
+                "ingredients": [
+                    {
+                        "name": "Kartoffeln",
+                        "amount": "1000",
+                        "unit": "g",
+                        "optional": False,
+                        "scaling": "linear",
+                    }
+                ],
+            }
+        ],
+        "instructions": [{"id": "step-1", "text": "Alles kochen."}],
+        "remarks": None,
+    }
+
+    created = await client.post("/recipes", json=payload)
+    assert created.status_code == 201
+
+    yaml_export = await client.get(
+        "/recipes/admin/export?format=yaml&group_id=family",
+        headers=headers,
+    )
+    assert yaml_export.status_code == 200
+    assert "recipes:" in yaml_export.text
+    assert "Kartoffelsuppe" in yaml_export.text
+
+    purge_group = await client.delete(
+        "/recipes/admin/purge?group_id=family",
+        headers=headers,
+    )
+    assert purge_group.status_code == 200
+    assert purge_group.json()["deleted_count"] == 1
+
+    preview_yaml = await client.post(
+        "/recipes/admin/import/preview",
+        headers=headers,
+        json={"format": "yaml", "content": yaml_export.text},
+    )
+    assert preview_yaml.status_code == 200
+    assert preview_yaml.json() == {
+        "imported": 1,
+        "would_create": 1,
+        "would_update": 0,
+    }
+
+    import_yaml = await client.post(
+        "/recipes/admin/import",
+        headers=headers,
+        json={"format": "yaml", "content": yaml_export.text},
+    )
+    assert import_yaml.status_code == 200
+    assert import_yaml.json()["imported"] == 1
+
+    markdown_export = await client.get(
+        "/recipes/admin/export?format=markdown",
+        headers=headers,
+    )
+    assert markdown_export.status_code == 200
+    assert markdown_export.text.startswith("# Rezepte Export")
+
+    purge_all = await client.delete("/recipes/admin/purge", headers=headers)
+    assert purge_all.status_code == 200
+    assert purge_all.json()["deleted_count"] == 1
+
+    preview_markdown = await client.post(
+        "/recipes/admin/import/preview",
+        headers=headers,
+        json={"format": "markdown", "content": markdown_export.text},
+    )
+    assert preview_markdown.status_code == 200
+    assert preview_markdown.json() == {
+        "imported": 1,
+        "would_create": 1,
+        "would_update": 0,
+    }
+
+    import_markdown = await client.post(
+        "/recipes/admin/import",
+        headers=headers,
+        json={"format": "markdown", "content": markdown_export.text},
+    )
+    assert import_markdown.status_code == 200
+    assert import_markdown.json()["imported"] == 1
+
+    listed = await client.get("/recipes")
+    assert listed.status_code == 200
+    assert len(listed.json()) == 1
+
+
+@pytest.mark.anyio
+async def test_non_admin_cannot_use_recipe_admin_tools(client):
+    admin_token = await _login_token(client)
+    admin_headers = {"Authorization": f"Bearer {admin_token}"}
+
+    create_user = await client.post(
+        "/users",
+        headers=admin_headers,
+        json={
+            "username": "reader",
+            "password": "very-secret",
+            "first_name": "Read",
+            "last_name": "Only",
+            "email": "reader@example.com",
+            "groups": [{"group_id": "recipes", "role": "reader"}],
+            "is_super_admin": False,
+        },
+    )
+    assert create_user.status_code == 201
+
+    reader_token = await _login_token(client, username="reader", password="very-secret")
+    reader_headers = {"Authorization": f"Bearer {reader_token}"}
+
+    export_response = await client.get("/recipes/admin/export", headers=reader_headers)
+    assert export_response.status_code == 403
+
+    purge_response = await client.delete("/recipes/admin/purge", headers=reader_headers)
+    assert purge_response.status_code == 403
+
+    import_response = await client.post(
+        "/recipes/admin/import",
+        headers=reader_headers,
+        json={"format": "yaml", "content": "recipes: []"},
+    )
+    assert import_response.status_code == 403
+
+    preview_response = await client.post(
+        "/recipes/admin/import/preview",
+        headers=reader_headers,
+        json={"format": "yaml", "content": "recipes: []"},
+    )
+    assert preview_response.status_code == 403
 
 
 @pytest.mark.anyio
