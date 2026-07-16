@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useState } from 'react';
+import { ChangeEvent, FormEvent, useEffect, useState } from 'react';
 import { apiFetch, apiFetchText } from '../../api/client';
 import { useAuth } from '../../auth/AuthContext';
 import type {
@@ -33,14 +33,17 @@ const EMPTY_NEW_USER: NewUserForm = {
   is_super_admin: false,
 };
 
+type AdminView = 'users' | 'import-export';
+
 export function AdminSection() {
-  const { token, user: currentUser, refreshUser } = useAuth();
+  const { token, user: currentUser, refreshUser, isAdmin } = useAuth();
   const [users, setUsers] = useState<UserPublic[]>([]);
   const [newUser, setNewUser] = useState<NewUserForm>(EMPTY_NEW_USER);
+  const [activeView, setActiveView] = useState<AdminView>('users');
   const [groupDrafts, setGroupDrafts] = useState<Record<string, GroupRole[]>>({});
   const [recipeGroupFilter, setRecipeGroupFilter] = useState('');
   const [recipeImportFormat, setRecipeImportFormat] = useState<RecipeExportFormat>('yaml');
-  const [recipeImportContent, setRecipeImportContent] = useState('');
+  const [recipeImportFile, setRecipeImportFile] = useState<File | null>(null);
   const [recipeImportPreview, setRecipeImportPreview] =
     useState<RecipeImportPreviewResponse | null>(null);
   const [status, setStatus] = useState('');
@@ -61,6 +64,12 @@ export function AdminSection() {
   useEffect(() => {
     void loadUsers();
   }, [token]);
+
+  useEffect(() => {
+    if (!isAdmin && activeView === 'import-export') {
+      setActiveView('users');
+    }
+  }, [activeView, isAdmin]);
 
   async function createUser(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
@@ -197,6 +206,50 @@ export function AdminSection() {
     return `?group_id=${encodeURIComponent(groupId)}`;
   }
 
+  function getRecipeImportFormat(fileName: string): RecipeExportFormat | null {
+    const extension = fileName.split('.').pop()?.toLowerCase();
+    if (extension === 'yaml' || extension === 'yml') return 'yaml';
+    if (extension === 'md' || extension === 'markdown') return 'markdown';
+    return null;
+  }
+
+  function selectRecipeImportFile(event: ChangeEvent<HTMLInputElement>): void {
+    const file = event.target.files?.[0] ?? null;
+    setRecipeImportPreview(null);
+    setStatus('');
+
+    if (!file) {
+      setRecipeImportFile(null);
+      return;
+    }
+
+    const format = getRecipeImportFormat(file.name);
+    if (!format) {
+      setRecipeImportFile(null);
+      setError('Bitte eine YAML- oder Markdown-Datei auswählen.');
+      event.target.value = '';
+      return;
+    }
+
+    setError('');
+    setRecipeImportFormat(format);
+    setRecipeImportFile(file);
+  }
+
+  async function getRecipeImportContent(): Promise<string | null> {
+    if (!recipeImportFile) {
+      setError('Bitte eine Import-Datei auswählen.');
+      return null;
+    }
+
+    const content = (await recipeImportFile.text()).trim();
+    if (!content) {
+      setError('Die ausgewählte Import-Datei ist leer.');
+      return null;
+    }
+    return content;
+  }
+
   async function exportRecipes(exportFormat: RecipeExportFormat): Promise<void> {
     setBusy(true);
     setError('');
@@ -257,11 +310,8 @@ export function AdminSection() {
   }
 
   async function importRecipes(): Promise<void> {
-    const content = recipeImportContent.trim();
-    if (!content) {
-      setError('Bitte Import-Inhalt einfügen.');
-      return;
-    }
+    const content = await getRecipeImportContent();
+    if (!content) return;
 
     setBusy(true);
     setError('');
@@ -287,11 +337,8 @@ export function AdminSection() {
   }
 
   async function previewImportRecipes(): Promise<void> {
-    const content = recipeImportContent.trim();
-    if (!content) {
-      setError('Bitte Import-Inhalt einfügen.');
-      return;
-    }
+    const content = await getRecipeImportContent();
+    if (!content) return;
 
     setBusy(true);
     setError('');
@@ -322,256 +369,294 @@ export function AdminSection() {
       <div className="section-heading">
         <div>
           <p className="eyebrow">Geschützter Bereich</p>
-          <h2 id="admin-heading">Benutzerverwaltung</h2>
+          <h2 id="admin-heading">Administration</h2>
         </div>
-        <button type="button" onClick={() => void loadUsers()} disabled={busy}>
-          Benutzer neu laden
-        </button>
+        <div className="admin-subnav" role="tablist" aria-label="Admin-Bereiche">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeView === 'users'}
+            className={activeView === 'users' ? 'active' : ''}
+            onClick={() => setActiveView('users')}
+          >
+            Benutzerverwaltung
+          </button>
+          {isAdmin && (
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeView === 'import-export'}
+              className={activeView === 'import-export' ? 'active' : ''}
+              onClick={() => setActiveView('import-export')}
+            >
+              Import/Export
+            </button>
+          )}
+        </div>
       </div>
       {status && <div className="auth-status">{status}</div>}
       {error && <div className="auth-error">{error}</div>}
 
-      <section className="card" aria-labelledby="recipe-admin-tools-heading">
-        <h3 id="recipe-admin-tools-heading">Rezepte: Export, Import und Bereinigung</h3>
-        <div className="form-grid">
-          <label>
-            Gruppen-ID (optional)
-            <input
-              value={recipeGroupFilter}
-              onChange={(event) => setRecipeGroupFilter(event.target.value)}
-              placeholder="z.B. family"
-            />
-          </label>
-          <label>
-            Import-Format
-            <select
-              value={recipeImportFormat}
-              onChange={(event) => setRecipeImportFormat(event.target.value as RecipeExportFormat)}
-            >
-              <option value="yaml">YAML</option>
-              <option value="markdown">Markdown</option>
-            </select>
-          </label>
-        </div>
-        <div className="button-row">
-          <button type="button" disabled={busy} onClick={() => void exportRecipes('yaml')}>
-            Export YAML
-          </button>
-          <button
-            type="button"
-            className="button-secondary"
-            disabled={busy}
-            onClick={() => void exportRecipes('markdown')}
-          >
-            Export Markdown
-          </button>
-          <button
-            type="button"
-            className="button-danger"
-            disabled={busy}
-            onClick={() => void purgeRecipes()}
-          >
-            Löschen (alle/Gruppe)
-          </button>
-        </div>
-        <label>
-          Import-Inhalt
-          <textarea
-            rows={10}
-            value={recipeImportContent}
-            onChange={(event) => setRecipeImportContent(event.target.value)}
-            placeholder="Exportierten YAML- oder Markdown-Inhalt hier einfügen"
-          />
-        </label>
-        <div className="button-row">
-          <button
-            type="button"
-            className="button-secondary"
-            disabled={busy}
-            onClick={() => void previewImportRecipes()}
-          >
-            Import prüfen
-          </button>
-          <button type="button" disabled={busy} onClick={() => void importRecipes()}>
-            Import starten
-          </button>
-        </div>
-        {recipeImportPreview && (
-          <p className="muted">
-            Vorschau-Ergebnis: {recipeImportPreview.imported} geprüft,{' '}
-            {recipeImportPreview.would_create} neu, {recipeImportPreview.would_update} würden
-            aktualisiert.
-          </p>
-        )}
-      </section>
-
-      <form onSubmit={createUser} className="card user-create-form">
-        <h3>Benutzer anlegen</h3>
-        <div className="form-grid">
-          <label>
-            Benutzername
-            <input
-              value={newUser.username}
-              onChange={(e) => setNewUser({ ...newUser, username: e.target.value })}
-              required
-            />
-          </label>
-          <label>
-            Passwort
-            <input
-              type="password"
-              minLength={8}
-              value={newUser.password}
-              onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
-              required
-            />
-          </label>
-          <label>
-            Vorname
-            <input
-              value={newUser.first_name}
-              onChange={(e) => setNewUser({ ...newUser, first_name: e.target.value })}
-              required
-            />
-          </label>
-          <label>
-            Nachname
-            <input
-              value={newUser.last_name}
-              onChange={(e) => setNewUser({ ...newUser, last_name: e.target.value })}
-              required
-            />
-          </label>
-          <label>
-            Email
-            <input
-              type="email"
-              value={newUser.email}
-              onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
-              required
-            />
-          </label>
-          <label>
-            Gruppen-ID
-            <input
-              value={newUser.group_id}
-              onChange={(e) => setNewUser({ ...newUser, group_id: e.target.value })}
-            />
-          </label>
-          <label>
-            Role
-            <select
-              value={newUser.role}
-              onChange={(e) => setNewUser({ ...newUser, role: e.target.value as Role })}
-            >
-              <option value="reader">Leser</option>
-              <option value="author">Autor</option>
-              <option value="admin">Administrator</option>
-            </select>
-          </label>
-          {currentUser?.is_super_admin && (
-            <label className="checkbox-label">
-              <input
-                type="checkbox"
-                checked={newUser.is_super_admin}
-                onChange={(e) => setNewUser({ ...newUser, is_super_admin: e.target.checked })}
-              />
-              Super-Admin
-            </label>
-          )}
-        </div>
-        <button type="submit" disabled={busy}>
-          Benutzer anlegen
-        </button>
-      </form>
-
-      <div className="user-list">
-        {users.map((user) => (
-          <article
-            className={`card user-card ${!user.is_active ? 'user-card--inactive' : ''}`}
-            key={user.id}
-          >
-            <div className="user-card__header">
-              <div>
-                <h3>
-                  {user.first_name} {user.last_name}
-                </h3>
-                <p className="muted">
-                  @{user.username} · {user.email}
-                </p>
-              </div>
-              <div className="badge-row">
-                {user.is_super_admin && <span className="badge">Super-Admin</span>}
-                {!user.is_active && <span className="badge badge--danger">Inaktiv</span>}
-              </div>
+      {activeView === 'users' && (
+        <>
+          <section className="card" aria-labelledby="user-management-heading">
+            <div className="section-heading">
+              <h3 id="user-management-heading">Benutzerverwaltung</h3>
+              <button type="button" onClick={() => void loadUsers()} disabled={busy}>
+                Benutzer neu laden
+              </button>
             </div>
-            <div className="group-editor">
-              <strong>Gruppenrollen</strong>
-              {(groupDrafts[user.id] ?? []).map((group, index) => (
-                <div className="group-row" key={`${user.id}-${index}`}>
+
+            <form onSubmit={createUser} className="user-create-form">
+              <h4>Benutzer anlegen</h4>
+              <div className="form-grid">
+                <label>
+                  Benutzername
                   <input
-                    value={group.group_id}
-                    onChange={(e) => updateGroup(user.id, index, { group_id: e.target.value })}
+                    value={newUser.username}
+                    onChange={(e) => setNewUser({ ...newUser, username: e.target.value })}
+                    required
                   />
+                </label>
+                <label>
+                  Passwort
+                  <input
+                    type="password"
+                    minLength={8}
+                    value={newUser.password}
+                    onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
+                    required
+                  />
+                </label>
+                <label>
+                  Vorname
+                  <input
+                    value={newUser.first_name}
+                    onChange={(e) => setNewUser({ ...newUser, first_name: e.target.value })}
+                    required
+                  />
+                </label>
+                <label>
+                  Nachname
+                  <input
+                    value={newUser.last_name}
+                    onChange={(e) => setNewUser({ ...newUser, last_name: e.target.value })}
+                    required
+                  />
+                </label>
+                <label>
+                  Email
+                  <input
+                    type="email"
+                    value={newUser.email}
+                    onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
+                    required
+                  />
+                </label>
+                <label>
+                  Gruppen-ID
+                  <input
+                    value={newUser.group_id}
+                    onChange={(e) => setNewUser({ ...newUser, group_id: e.target.value })}
+                  />
+                </label>
+                <label>
+                  Role
                   <select
-                    value={group.role}
-                    onChange={(e) => updateGroup(user.id, index, { role: e.target.value as Role })}
+                    value={newUser.role}
+                    onChange={(e) => setNewUser({ ...newUser, role: e.target.value as Role })}
                   >
                     <option value="reader">Leser</option>
                     <option value="author">Autor</option>
                     <option value="admin">Administrator</option>
                   </select>
-                  <button
-                    type="button"
-                    className="button-danger button-small"
-                    onClick={() => removeGroup(user.id, index)}
-                  >
-                    Entfernen
-                  </button>
-                </div>
-              ))}
-              <div className="button-row">
-                <button
-                  type="button"
-                  className="button-secondary button-small"
-                  onClick={() => addGroup(user.id)}
-                >
-                  Gruppe hinzufügen
-                </button>
-                <button
-                  type="button"
-                  className="button-small"
-                  disabled={busy || !user.is_active}
-                  onClick={() => void saveGroups(user)}
-                >
-                  Gruppen speichern
-                </button>
-              </div>
-            </div>
-            {currentUser?.is_super_admin && (
-              <div className="user-card__actions">
-                <label className="checkbox-label">
-                  <input
-                    type="checkbox"
-                    checked={user.is_super_admin}
-                    disabled={busy || !user.is_active}
-                    onChange={(e) => void setSuperAdministrator(user, e.target.checked)}
-                  />
-                  Super-Admin
                 </label>
-                <button
-                  type="button"
-                  className="button-danger"
-                  disabled={busy || !user.is_active}
-                  onClick={() => void deactivateUser(user)}
-                >
-                  Benutzer deaktivieren
-                </button>
+                {currentUser?.is_super_admin && (
+                  <label className="checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={newUser.is_super_admin}
+                      onChange={(e) => setNewUser({ ...newUser, is_super_admin: e.target.checked })}
+                    />
+                    Super-Admin
+                  </label>
+                )}
               </div>
-            )}
-          </article>
-        ))}
-      </div>
+              <button type="submit" disabled={busy}>
+                Benutzer anlegen
+              </button>
+            </form>
+          </section>
+
+          <div className="user-list">
+            {users.map((user) => (
+              <article
+                className={`card user-card ${!user.is_active ? 'user-card--inactive' : ''}`}
+                key={user.id}
+              >
+                <div className="user-card__header">
+                  <div>
+                    <h3>
+                      {user.first_name} {user.last_name}
+                    </h3>
+                    <p className="muted">
+                      @{user.username} · {user.email}
+                    </p>
+                  </div>
+                  <div className="badge-row">
+                    {user.is_super_admin && <span className="badge">Super-Admin</span>}
+                    {!user.is_active && <span className="badge badge--danger">Inaktiv</span>}
+                  </div>
+                </div>
+                <div className="group-editor">
+                  <strong>Gruppenrollen</strong>
+                  {(groupDrafts[user.id] ?? []).map((group, index) => (
+                    <div className="group-row" key={`${user.id}-${index}`}>
+                      <input
+                        value={group.group_id}
+                        onChange={(e) => updateGroup(user.id, index, { group_id: e.target.value })}
+                      />
+                      <select
+                        value={group.role}
+                        onChange={(e) =>
+                          updateGroup(user.id, index, { role: e.target.value as Role })
+                        }
+                      >
+                        <option value="reader">Leser</option>
+                        <option value="author">Autor</option>
+                        <option value="admin">Administrator</option>
+                      </select>
+                      <button
+                        type="button"
+                        className="button-danger button-small"
+                        onClick={() => removeGroup(user.id, index)}
+                      >
+                        Entfernen
+                      </button>
+                    </div>
+                  ))}
+                  <div className="button-row">
+                    <button
+                      type="button"
+                      className="button-secondary button-small"
+                      onClick={() => addGroup(user.id)}
+                    >
+                      Gruppe hinzufügen
+                    </button>
+                    <button
+                      type="button"
+                      className="button-small"
+                      disabled={busy || !user.is_active}
+                      onClick={() => void saveGroups(user)}
+                    >
+                      Gruppen speichern
+                    </button>
+                  </div>
+                </div>
+                {currentUser?.is_super_admin && (
+                  <div className="user-card__actions">
+                    <label className="checkbox-label">
+                      <input
+                        type="checkbox"
+                        checked={user.is_super_admin}
+                        disabled={busy || !user.is_active}
+                        onChange={(e) => void setSuperAdministrator(user, e.target.checked)}
+                      />
+                      Super-Admin
+                    </label>
+                    <button
+                      type="button"
+                      className="button-danger"
+                      disabled={busy || !user.is_active}
+                      onClick={() => void deactivateUser(user)}
+                    >
+                      Benutzer deaktivieren
+                    </button>
+                  </div>
+                )}
+              </article>
+            ))}
+          </div>
+        </>
+      )}
+
+      {activeView === 'import-export' && isAdmin && (
+        <section className="card" aria-labelledby="recipe-admin-tools-heading">
+          <h3 id="recipe-admin-tools-heading">Import/Export</h3>
+          <div className="form-grid">
+            <label>
+              Gruppen-ID (optional)
+              <input
+                value={recipeGroupFilter}
+                onChange={(event) => setRecipeGroupFilter(event.target.value)}
+                placeholder="z.B. family"
+              />
+            </label>
+            <label>
+              Import-Format
+              <select
+                value={recipeImportFormat}
+                onChange={(event) =>
+                  setRecipeImportFormat(event.target.value as RecipeExportFormat)
+                }
+              >
+                <option value="yaml">YAML</option>
+                <option value="markdown">Markdown</option>
+              </select>
+            </label>
+          </div>
+          <div className="button-row">
+            <button type="button" disabled={busy} onClick={() => void exportRecipes('yaml')}>
+              Export YAML
+            </button>
+            <button
+              type="button"
+              className="button-secondary"
+              disabled={busy}
+              onClick={() => void exportRecipes('markdown')}
+            >
+              Export Markdown
+            </button>
+            <button
+              type="button"
+              className="button-danger"
+              disabled={busy}
+              onClick={() => void purgeRecipes()}
+            >
+              Löschen (alle/Gruppe)
+            </button>
+          </div>
+          <label>
+            Import-Datei
+            <input
+              type="file"
+              accept=".yaml,.yml,.md,.markdown,application/x-yaml,text/yaml,text/markdown"
+              onChange={selectRecipeImportFile}
+            />
+          </label>
+          {recipeImportFile && <p className="muted">Ausgewählt: {recipeImportFile.name}</p>}
+          <div className="button-row">
+            <button
+              type="button"
+              className="button-secondary"
+              disabled={busy}
+              onClick={() => void previewImportRecipes()}
+            >
+              Import prüfen
+            </button>
+            <button type="button" disabled={busy} onClick={() => void importRecipes()}>
+              Import starten
+            </button>
+          </div>
+          {recipeImportPreview && (
+            <p className="muted">
+              Vorschau-Ergebnis: {recipeImportPreview.imported} geprüft,{' '}
+              {recipeImportPreview.would_create} neu, {recipeImportPreview.would_update} würden
+              aktualisiert.
+            </p>
+          )}
+        </section>
+      )}
     </section>
   );
 }

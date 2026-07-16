@@ -253,6 +253,23 @@ a {
   margin-bottom: 16px;
 }
 
+.admin-subnav {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.admin-subnav button {
+  background: #e5e7eb;
+  color: #111827;
+}
+
+.admin-subnav button:hover,
+.admin-subnav button.active {
+  background: #111827;
+  color: #ffffff;
+}
+
 .muted {
   color: #6b7280;
 }
