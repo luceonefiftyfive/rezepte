@@ -84,4 +84,62 @@ describe('RecipeSection', () => {
     expect(detailSection).toHaveTextContent('Teig kneten.');
     expect(detailSection).toHaveTextContent('Frisch servieren.');
   });
+
+  it('renders recipe and step images when signed URLs are available', async () => {
+    mockedApiFetch
+      .mockResolvedValueOnce([
+        {
+          id: 'recipe-1',
+          title: 'Brot',
+          description: 'Mit Foto',
+          recipe_image_key: 'recipes/recipe-1/cover/cover.jpg',
+          group_ids: ['family'],
+          tags: ['Backen'],
+          time: { preparation_minutes: 10, cooking_minutes: 40, resting_minutes: 60 },
+          yield: { amount: '1', unit: 'Laib' },
+          ingredient_sections: [],
+          instructions: [
+            {
+              id: 'step-1',
+              text: 'Teig kneten.',
+              image_key: 'recipes/recipe-1/steps/step-1/step.jpg',
+            },
+          ],
+          remarks: null,
+          created_at: '2026-07-12T12:00:00Z',
+          updated_at: '2026-07-12T12:00:00Z',
+          version: 1,
+        },
+      ])
+      .mockResolvedValueOnce({
+        ok: true,
+        key: 'recipes/recipe-1/cover/cover.jpg',
+        view_url: 'https://signed.local/cover.jpg',
+        expires_in: 3600,
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        key: 'recipes/recipe-1/steps/step-1/step.jpg',
+        view_url: 'https://signed.local/step.jpg',
+        expires_in: 3600,
+      });
+
+    render(<RecipeSection />);
+    await waitFor(() => expect(screen.getByText('Brot')).toBeInTheDocument());
+
+    await waitFor(() => {
+      const previewImage = screen.getByAltText('Vorschaubild Brot') as HTMLImageElement;
+      expect(previewImage.src).toContain('https://signed.local/cover.jpg');
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /Anzeigen/i }));
+
+    await waitFor(() => {
+      const recipeImage = screen.getByAltText('Rezeptbild Brot') as HTMLImageElement;
+      expect(recipeImage.src).toContain('https://signed.local/cover.jpg');
+    });
+
+    const stepImage = screen.getByAltText('Schrittbild Brot') as HTMLImageElement;
+    expect(stepImage.src).toContain('https://signed.local/step.jpg');
+  });
 });

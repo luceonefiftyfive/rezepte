@@ -9,6 +9,9 @@ class FakeS3Client:
     def __init__(self) -> None:
         self.head_bucket = Mock(return_value={})
         self.put_object = Mock(return_value={"ETag": "test-etag"})
+        self.generate_presigned_url = Mock(
+            side_effect=lambda *_args, **kwargs: f"https://signed.local/{kwargs['Params']['Key']}?exp={kwargs['ExpiresIn']}"
+        )
 
 
 @pytest.fixture(autouse=True)
@@ -412,3 +415,65 @@ async def test_image_upload_maps_s3_client_error_to_http_500(client):
     )
     assert response.status_code == 500
     assert "upload failed" in response.json()["detail"]
+
+
+@pytest.mark.anyio
+async def test_recipe_scoped_image_upload_and_view_url(client):
+    create_payload = {
+        "title": "Bildtest",
+        "description": None,
+        "group_ids": [],
+        "tags": [],
+        "time": {
+            "preparation_minutes": 1,
+            "cooking_minutes": 2,
+            "resting_minutes": 3,
+        },
+        "yield": {"amount": "2", "unit": "Portionen"},
+        "ingredient_sections": [],
+        "instructions": [{"id": "step-1", "text": "Teig kneten."}],
+        "remarks": None,
+    }
+    created = await client.post("/recipes", json=create_payload)
+    assert created.status_code == 201
+    recipe = created.json()
+
+    upload_cover = await client.post(
+        f"/recipes/{recipe['id']}/images/upload",
+        files={"file": ("cover.jpg", b"jpeg-content", "image/jpeg")},
+    )
+    assert upload_cover.status_code == 200
+    cover = upload_cover.json()
+    assert cover["key"].startswith(f"recipes/{recipe['id']}/cover/")
+    assert "view_url" in cover
+
+    upload_step = await client.post(
+        f"/recipes/{recipe['id']}/instructions/step-1/image/upload",
+        files={"file": ("step.jpg", b"jpeg-content", "image/jpeg")},
+    )
+    assert upload_step.status_code == 200
+    step = upload_step.json()
+    assert step["key"].startswith(f"recipes/{recipe['id']}/steps/step-1/")
+    assert "view_url" in step
+
+    update = await client.put(
+        f"/recipes/{recipe['id']}",
+        json={
+            "recipe_image_key": cover["key"],
+            "instructions": [
+                {"id": "step-1", "text": "Teig kneten.", "image_key": step["key"]}
+            ],
+            "version": recipe["version"],
+        },
+    )
+    assert update.status_code == 200
+
+    cover_url = await client.get(f"/recipes/{recipe['id']}/image-url")
+    assert cover_url.status_code == 200
+    assert cover_url.json()["key"] == cover["key"]
+
+    step_url = await client.get(
+        f"/recipes/{recipe['id']}/instructions/step-1/image-url"
+    )
+    assert step_url.status_code == 200
+    assert step_url.json()["key"] == step["key"]

@@ -60,7 +60,7 @@ export type IngredientSection = {
   name: string | null;
   ingredients: RecipeIngredient[];
 };
-export type InstructionStep = { id: string; text: string };
+export type InstructionStep = { id: string; text: string; image_key?: string | null };
 export type RecipeTime = {
   preparation_minutes: number | null;
   cooking_minutes: number | null;
@@ -70,6 +70,7 @@ export type RecipeYield = { amount: string; unit: string };
 export type RecipePayload = {
   title: string;
   description: string | null;
+  recipe_image_key?: string | null;
   group_ids: string[];
   tags: string[];
   time: RecipeTime;
@@ -98,4 +99,13 @@ export type ImageUploadResponse = {
   key: string;
   size: number;
   content_type: string;
+  view_url?: string;
+  expires_in?: number;
+};
+
+export type SignedImageUrlResponse = {
+  ok: boolean;
+  key: string;
+  view_url: string;
+  expires_in: number;
 };

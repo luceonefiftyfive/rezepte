@@ -60,6 +60,7 @@ class IngredientSection(BaseModel):
 class InstructionStep(BaseModel):
     id: str = Field(min_length=1, max_length=80)
     text: str = Field(min_length=1, max_length=5000)
+    image_key: str | None = Field(default=None, max_length=500)
 
 
 class RecipeTime(BaseModel):
@@ -76,6 +77,7 @@ class RecipeYield(BaseModel):
 class RecipeBase(BaseModel):
     title: str = Field(min_length=1, max_length=200)
     description: str | None = Field(default=None, max_length=5000)
+    recipe_image_key: str | None = Field(default=None, max_length=500)
     group_ids: list[str] = Field(default_factory=list)
     tags: list[str] = Field(default_factory=list)
     time: RecipeTime = Field(default_factory=RecipeTime)
@@ -104,6 +106,7 @@ class RecipeCreate(RecipeBase):
 class RecipeUpdate(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=200)
     description: str | None = Field(default=None, max_length=5000)
+    recipe_image_key: str | None = Field(default=None, max_length=500)
     group_ids: list[str] | None = None
     tags: list[str] | None = None
     time: RecipeTime | None = None

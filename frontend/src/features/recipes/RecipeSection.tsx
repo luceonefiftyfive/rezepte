@@ -1,7 +1,13 @@
-import { ChangeEvent, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { apiFetch } from '../../api/client';
 import { useAuth } from '../../auth/AuthContext';
-import type { ImageUploadResponse, Recipe, RecipePayload, Unit } from '../../types';
+import type {
+  ImageUploadResponse,
+  Recipe,
+  RecipePayload,
+  SignedImageUrlResponse,
+  Unit,
+} from '../../types';
 import { RecipeEditor } from './RecipeEditor';
 
 const unitLabels: Record<Exclude<Unit, 'custom'>, string> = {
@@ -44,10 +50,14 @@ export function RecipeSection() {
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
   const [search, setSearch] = useState('');
   const [selectedTag, setSelectedTag] = useState('');
-  const [imageResult, setImageResult] = useState<ImageUploadResponse | null>(null);
   const [error, setError] = useState('');
   const [status, setStatus] = useState('');
   const [busy, setBusy] = useState(false);
+  const [recipePreviewImages, setRecipePreviewImages] = useState<
+    Record<string, { key: string; url: string }>
+  >({});
+  const [recipeImageUrl, setRecipeImageUrl] = useState<string | null>(null);
+  const [stepImageUrls, setStepImageUrls] = useState<Record<string, string>>({});
 
   const availableTags = useMemo(
     () => Array.from(new Set(recipes.flatMap((recipe) => recipe.tags))).sort(),
@@ -133,27 +143,135 @@ export function RecipeSection() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
-  async function uploadImage(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    if (!file) return;
+  async function uploadRecipeImage(recipeId: string, file: File): Promise<ImageUploadResponse> {
     const data = new FormData();
     data.append('file', file);
+    return apiFetch<ImageUploadResponse>(
+      `/recipes/${recipeId}/images/upload`,
+      { method: 'POST', body: data },
+      token,
+    );
+  }
 
-    setBusy(true);
-    try {
-      setImageResult(await apiFetch('/images/test-upload', { method: 'POST', body: data }, token));
-      setStatus('Bild wurde hochgeladen.');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unbekannter Fehler');
-    } finally {
-      setBusy(false);
-      event.target.value = '';
+  async function uploadInstructionImage(
+    recipeId: string,
+    stepId: string,
+    file: File,
+  ): Promise<ImageUploadResponse> {
+    const data = new FormData();
+    data.append('file', file);
+    return apiFetch<ImageUploadResponse>(
+      `/recipes/${recipeId}/instructions/${stepId}/image/upload`,
+      { method: 'POST', body: data },
+      token,
+    );
+  }
+
+  async function refreshSelectedRecipeImageUrls(recipe: Recipe) {
+    let nextRecipeImageUrl: string | null = null;
+    const nextStepImageUrls: Record<string, string> = {};
+
+    if (recipe.recipe_image_key) {
+      const cached = recipePreviewImages[recipe.id];
+      if (cached?.key === recipe.recipe_image_key) {
+        nextRecipeImageUrl = cached.url;
+      } else {
+        try {
+          const response = await apiFetch<SignedImageUrlResponse>(
+            `/recipes/${recipe.id}/image-url`,
+            {},
+            token,
+          );
+          nextRecipeImageUrl = response.view_url;
+          setRecipePreviewImages((current) => ({
+            ...current,
+            [recipe.id]: { key: recipe.recipe_image_key as string, url: response.view_url },
+          }));
+        } catch {
+          nextRecipeImageUrl = null;
+        }
+      }
     }
+
+    for (const step of recipe.instructions) {
+      if (!step.image_key) continue;
+      try {
+        const response = await apiFetch<SignedImageUrlResponse>(
+          `/recipes/${recipe.id}/instructions/${step.id}/image-url`,
+          {},
+          token,
+        );
+        nextStepImageUrls[step.id] = response.view_url;
+      } catch {
+        // Keep detail rendering resilient even with stale image keys.
+      }
+    }
+
+    setRecipeImageUrl(nextRecipeImageUrl);
+    setStepImageUrls(nextStepImageUrls);
   }
 
   useEffect(() => {
     void loadRecipes();
   }, [token]);
+
+  useEffect(() => {
+    let active = true;
+    const recipesNeedingPreview = visibleRecipes.filter(
+      (recipe) =>
+        recipe.recipe_image_key && recipePreviewImages[recipe.id]?.key !== recipe.recipe_image_key,
+    );
+
+    if (recipesNeedingPreview.length === 0) {
+      return () => {
+        active = false;
+      };
+    }
+
+    void Promise.all(
+      recipesNeedingPreview.map(async (recipe) => {
+        try {
+          const response = await apiFetch<SignedImageUrlResponse>(
+            `/recipes/${recipe.id}/image-url`,
+            {},
+            token,
+          );
+          return {
+            id: recipe.id,
+            key: recipe.recipe_image_key as string,
+            url: response.view_url,
+          };
+        } catch {
+          return null;
+        }
+      }),
+    ).then((results) => {
+      if (!active) return;
+      const successful = results.filter((result) => result !== null);
+      if (successful.length === 0) return;
+
+      setRecipePreviewImages((current) => {
+        const next = { ...current };
+        for (const result of successful) {
+          next[result.id] = { key: result.key, url: result.url };
+        }
+        return next;
+      });
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [visibleRecipes, recipePreviewImages, token]);
+
+  useEffect(() => {
+    if (!selectedRecipe) {
+      setRecipeImageUrl(null);
+      setStepImageUrls({});
+      return;
+    }
+    void refreshSelectedRecipeImageUrls(selectedRecipe);
+  }, [recipePreviewImages, selectedRecipe, token]);
 
   return (
     <section aria-labelledby="recipes-heading">
@@ -229,50 +347,66 @@ export function RecipeSection() {
           <p>Keine passenden Rezepte vorhanden.</p>
         ) : (
           <ul className="recipe-list">
-            {visibleRecipes.map((recipe) => (
-              <li key={recipe.id} className="recipe-card">
-                <article>
-                  <header className="recipe-card-header">
-                    <h3>{recipe.title}</h3>
-                    <small className="muted">
-                      Aktualisiert: {formatDate(recipe.updated_at)} · Version {recipe.version}
-                    </small>
-                  </header>
-                  {recipe.description && <p>{recipe.description}</p>}
-                  <div className="badge-row">
-                    {recipe.tags.map((tag) => (
-                      <span className="badge" key={tag}>
-                        {tag}
-                      </span>
-                    ))}
+            {visibleRecipes.map((recipe) => {
+              const previewImageUrl =
+                recipe.recipe_image_key &&
+                recipePreviewImages[recipe.id]?.key === recipe.recipe_image_key
+                  ? recipePreviewImages[recipe.id]?.url
+                  : null;
+
+              return (
+                <li key={recipe.id} className="recipe-card">
+                  <article>
+                    {previewImageUrl && (
+                      <img
+                        className="recipe-list-thumb"
+                        src={previewImageUrl}
+                        alt={`Vorschaubild ${recipe.title}`}
+                        loading="lazy"
+                      />
+                    )}
+                    <header className="recipe-card-header">
+                      <h3>{recipe.title}</h3>
+                      <small className="muted">
+                        Aktualisiert: {formatDate(recipe.updated_at)} · Version {recipe.version}
+                      </small>
+                    </header>
+                    {recipe.description && <p>{recipe.description}</p>}
+                    <div className="badge-row">
+                      {recipe.tags.map((tag) => (
+                        <span className="badge" key={tag}>
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                    <div className="recipe-card-meta">
+                      <span>{formatIngredient(recipe) || 'keine Zutaten'}</span>
+                      <span>{recipe.instructions.length} Schritte</span>
+                    </div>
+                  </article>
+                  <div className="recipe-card-actions">
+                    <button type="button" onClick={() => openRecipeDetail(recipe)}>
+                      Anzeigen
+                    </button>
+                    <button
+                      type="button"
+                      className="button-secondary"
+                      onClick={() => openRecipeEditor(recipe)}
+                    >
+                      Bearbeiten
+                    </button>
+                    <button
+                      className="button-danger"
+                      type="button"
+                      disabled={busy}
+                      onClick={() => void deleteRecipe(recipe)}
+                    >
+                      Löschen
+                    </button>
                   </div>
-                  <div className="recipe-card-meta">
-                    <span>{formatIngredient(recipe) || 'keine Zutaten'}</span>
-                    <span>{recipe.instructions.length} Schritte</span>
-                  </div>
-                </article>
-                <div className="recipe-card-actions">
-                  <button type="button" onClick={() => openRecipeDetail(recipe)}>
-                    Anzeigen
-                  </button>
-                  <button
-                    type="button"
-                    className="button-secondary"
-                    onClick={() => openRecipeEditor(recipe)}
-                  >
-                    Bearbeiten
-                  </button>
-                  <button
-                    className="button-danger"
-                    type="button"
-                    disabled={busy}
-                    onClick={() => void deleteRecipe(recipe)}
-                  >
-                    Löschen
-                  </button>
-                </div>
-              </li>
-            ))}
+                </li>
+              );
+            })}
           </ul>
         )}
       </div>
@@ -292,6 +426,13 @@ export function RecipeSection() {
             </button>
           </div>
           {selectedRecipe.description && <p>{selectedRecipe.description}</p>}
+          {recipeImageUrl && (
+            <img
+              className="recipe-detail-image"
+              src={recipeImageUrl}
+              alt={`Rezeptbild ${selectedRecipe.title}`}
+            />
+          )}
           <div className="recipe-detail-meta">
             <p>
               <strong>Rezeptbücher:</strong> {selectedRecipe.group_ids.join(', ') || 'keine'}
@@ -330,7 +471,16 @@ export function RecipeSection() {
             <h4>Zubereitung</h4>
             <ol>
               {selectedRecipe.instructions.map((step) => (
-                <li key={step.id}>{step.text}</li>
+                <li key={step.id}>
+                  {step.text}
+                  {stepImageUrls[step.id] && (
+                    <img
+                      className="recipe-step-image"
+                      src={stepImageUrls[step.id]}
+                      alt={`Schrittbild ${selectedRecipe.title}`}
+                    />
+                  )}
+                </li>
               ))}
             </ol>
           </div>
@@ -347,12 +497,9 @@ export function RecipeSection() {
         busy={busy}
         onSave={saveRecipe}
         onCancel={() => setEditing(null)}
+        onUploadRecipeImage={uploadRecipeImage}
+        onUploadInstructionImage={uploadInstructionImage}
       />
-      <div className="card image-upload-card">
-        <h3>Bild-Upload testen</h3>
-        <input type="file" accept="image/*" onChange={uploadImage} disabled={busy} />
-        {imageResult && <p className="muted">Gespeichert als: {imageResult.key}</p>}
-      </div>
     </section>
   );
 }
