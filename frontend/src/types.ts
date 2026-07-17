@@ -85,7 +85,7 @@ export type Recipe = RecipePayload & {
   updated_at: string;
   version: number;
 };
-export type RecipeExportFormat = 'yaml' | 'markdown';
+export type RecipeExportFormat = 'yaml' | 'markdown' | 'zip';
 export type RecipeImportResponse = { imported: number; created: number; updated: number };
 export type RecipeImportPreviewResponse = {
   imported: number;

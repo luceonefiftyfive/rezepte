@@ -6,7 +6,6 @@ from app.models.recipes import (
     RecipeCreate,
     RecipeExportFormat,
     RecipeImportPreviewResult,
-    RecipeImportRequest,
     RecipeImportResult,
     RecipeOut,
     RecipeUpdate,
@@ -28,6 +27,54 @@ def _recipe_image_url(request: Request, key: str) -> str:
     return f"{base_url}/api/recipes/images/{image_key}"
 
 
+async def _read_recipe_import_payload(
+    request: Request,
+) -> tuple[RecipeExportFormat, str | None, bytes | None]:
+    content_type = request.headers.get("content-type", "")
+    if content_type.startswith("multipart/form-data"):
+        form = await request.form()
+        raw_format = form.get("format")
+        if not isinstance(raw_format, str) or not raw_format:
+            raise HTTPException(status_code=400, detail="Import format is required")
+        try:
+            import_format = RecipeExportFormat(raw_format)
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=400, detail="Invalid import format"
+            ) from exc
+
+        content = form.get("content")
+        archive = form.get("archive")
+        archive_content = None
+        if archive is not None:
+            if not hasattr(archive, "read"):
+                raise HTTPException(status_code=400, detail="Invalid archive upload")
+            archive_content = await archive.read()
+
+        if import_format == RecipeExportFormat.ZIP:
+            if archive_content is None:
+                raise HTTPException(
+                    status_code=400, detail="Please select a ZIP archive"
+                )
+            return import_format, None, archive_content
+
+        if not isinstance(content, str):
+            raise HTTPException(status_code=400, detail="Import content is required")
+        return import_format, content, None
+
+    payload = await request.json()
+    raw_format = payload.get("format", RecipeExportFormat.YAML)
+    try:
+        import_format = RecipeExportFormat(raw_format)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid import format") from exc
+
+    content = payload.get("content")
+    if not isinstance(content, str):
+        raise HTTPException(status_code=400, detail="Import content is required")
+    return import_format, content, None
+
+
 @router.get("", response_model=list[RecipeOut])
 async def list_recipes(
     db: Annotated[AsyncIOMotorDatabase, Depends(get_db)],
@@ -35,16 +82,27 @@ async def list_recipes(
     return await RecipeService(db).list_recipes()
 
 
-@router.get("/admin/export", response_class=PlainTextResponse)
+@router.get("/admin/export", response_model=None)
 async def export_recipes(
     db: Annotated[AsyncIOMotorDatabase, Depends(get_db)],
     request: Request,
     _: Annotated[dict, Depends(require_admin_or_super_admin)],
     format: RecipeExportFormat = RecipeExportFormat.YAML,
     group_id: str | None = None,
-) -> str:
+) -> str | Response:
     service = RecipeService(db, request.app.state.s3_client, settings)
-    return await service.export_recipes(export_format=format, group_id=group_id)
+    exported = await service.export_recipes(export_format=format, group_id=group_id)
+    if format == RecipeExportFormat.ZIP:
+        assert isinstance(exported, bytes)
+        return Response(
+            content=exported,
+            media_type="application/zip",
+            headers={
+                "Content-Disposition": 'attachment; filename="rezepte-export.zip"'
+            },
+        )
+    assert isinstance(exported, str)
+    return PlainTextResponse(exported)
 
 
 @router.delete("/admin/purge")
@@ -59,17 +117,20 @@ async def purge_recipes(
 
 @router.post("/admin/import/preview", response_model=RecipeImportPreviewResult)
 async def preview_import_recipes(
-    payload: RecipeImportRequest,
     db: Annotated[AsyncIOMotorDatabase, Depends(get_db)],
     request: Request,
     _: Annotated[dict, Depends(require_admin_or_super_admin)],
 ) -> RecipeImportPreviewResult:
     try:
+        import_format, content, archive_content = await _read_recipe_import_payload(
+            request
+        )
         return await RecipeService(
             db, request.app.state.s3_client, settings
         ).preview_import_recipes(
-            content=payload.content,
-            import_format=payload.format,
+            content=content,
+            import_format=import_format,
+            archive_content=archive_content,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -77,17 +138,20 @@ async def preview_import_recipes(
 
 @router.post("/admin/import", response_model=RecipeImportResult)
 async def import_recipes(
-    payload: RecipeImportRequest,
     db: Annotated[AsyncIOMotorDatabase, Depends(get_db)],
     request: Request,
     _: Annotated[dict, Depends(require_admin_or_super_admin)],
 ) -> RecipeImportResult:
     try:
+        import_format, content, archive_content = await _read_recipe_import_payload(
+            request
+        )
         return await RecipeService(
             db, request.app.state.s3_client, settings
         ).import_recipes(
-            content=payload.content,
-            import_format=payload.format,
+            content=content,
+            import_format=import_format,
+            archive_content=archive_content,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

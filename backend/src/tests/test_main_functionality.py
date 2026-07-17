@@ -1,3 +1,5 @@
+import io
+import zipfile
 from unittest.mock import Mock
 from urllib.parse import urlsplit
 
@@ -320,6 +322,48 @@ async def test_recipe_admin_export_import_and_purge(client):
     )
     assert import_yaml.status_code == 200
     assert import_yaml.json()["imported"] == 1
+    assert cover_key in app.state.s3_client.objects
+    assert step_key in app.state.s3_client.objects
+
+    zip_export = await client.get(
+        "/recipes/admin/export?format=zip&group_id=family",
+        headers=headers,
+    )
+    assert zip_export.status_code == 200
+    assert zip_export.headers["content-type"].startswith("application/zip")
+    with zipfile.ZipFile(io.BytesIO(zip_export.content)) as archive:
+        manifest = archive.read("manifest.yaml").decode("utf-8")
+        assert "recipes:" in manifest
+        assert archive.read(f"images/{cover_key}") == b"cover-bytes"
+        assert archive.read(f"images/{step_key}") == b"step-bytes"
+
+    app.state.s3_client.objects.clear()
+
+    preview_zip = await client.post(
+        "/recipes/admin/import/preview",
+        headers=headers,
+        files={
+            "format": (None, "zip"),
+            "archive": ("rezepte-export.zip", zip_export.content, "application/zip"),
+        },
+    )
+    assert preview_zip.status_code == 200
+    assert preview_zip.json() == {
+        "imported": 1,
+        "would_create": 0,
+        "would_update": 1,
+    }
+
+    import_zip = await client.post(
+        "/recipes/admin/import",
+        headers=headers,
+        files={
+            "format": (None, "zip"),
+            "archive": ("rezepte-export.zip", zip_export.content, "application/zip"),
+        },
+    )
+    assert import_zip.status_code == 200
+    assert import_zip.json()["imported"] == 1
     assert cover_key in app.state.s3_client.objects
     assert step_key in app.state.s3_client.objects
 

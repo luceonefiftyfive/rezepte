@@ -31,6 +31,27 @@ function getIngredientUnitLabel(unit: Unit, customUnit?: string | null): string 
   return unitLabels[unit] ?? unit;
 }
 
+function formatIngredient(recipe: Recipe): string {
+  return recipe.ingredient_sections
+    .flatMap((section) => section.ingredients)
+    .map((ingredient) => {
+      const parts = [
+        ingredient.amount ?? '',
+        getIngredientUnitLabel(ingredient.unit, ingredient.custom_unit),
+        ingredient.name,
+        ingredient.preparation ?? '',
+        ingredient.remarks ?? '',
+      ];
+
+      return parts
+        .map((value) => value.trim())
+        .filter(Boolean)
+        .join(' ')
+        .toLocaleLowerCase('de');
+    })
+    .join(' ');
+}
+
 export function RecipeSection() {
   const { token } = useAuth();
   const [recipes, setRecipes] = useState<Recipe[]>([]);
@@ -347,7 +368,9 @@ export function RecipeSection() {
                   <button
                     type="button"
                     className={
-                      selectedRecipe?.id === recipe.id ? 'recipe-overview-tile active' : 'recipe-overview-tile'
+                      selectedRecipe?.id === recipe.id
+                        ? 'recipe-overview-tile active'
+                        : 'recipe-overview-tile'
                     }
                     onClick={() => openRecipeDetail(recipe)}
                   >
@@ -360,7 +383,10 @@ export function RecipeSection() {
                       />
                     )}
                     {!previewImageUrl && (
-                      <div className="recipe-overview-image recipe-overview-image--placeholder" aria-hidden="true" />
+                      <div
+                        className="recipe-overview-image recipe-overview-image--placeholder"
+                        aria-hidden="true"
+                      />
                     )}
                     <span className="recipe-overview-title">{recipe.title}</span>
                   </button>
