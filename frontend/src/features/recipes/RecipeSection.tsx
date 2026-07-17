@@ -52,12 +52,22 @@ function formatIngredient(recipe: Recipe): string {
     .join(' ');
 }
 
-export function RecipeSection() {
+interface RecipeSectionProps {
+  searchQuery?: string;
+  createRequestVersion?: number;
+  overviewRequestVersion?: number;
+}
+
+export function RecipeSection({
+  searchQuery = '',
+  createRequestVersion = 0,
+  overviewRequestVersion = 0,
+}: RecipeSectionProps) {
   const { token } = useAuth();
   const [recipes, setRecipes] = useState<Recipe[]>([]);
+  const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [editing, setEditing] = useState<Recipe | null>(null);
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
-  const [search, setSearch] = useState('');
   const [selectedTag, setSelectedTag] = useState('');
   const [error, setError] = useState('');
   const [status, setStatus] = useState('');
@@ -74,7 +84,7 @@ export function RecipeSection() {
   );
 
   const visibleRecipes = useMemo(() => {
-    const needle = search.trim().toLocaleLowerCase('de');
+    const needle = searchQuery.trim().toLocaleLowerCase('de');
     return recipes.filter((recipe) => {
       const matchesSearch =
         !needle ||
@@ -84,7 +94,7 @@ export function RecipeSection() {
       const matchesTag = !selectedTag || recipe.tags.includes(selectedTag);
       return matchesSearch && matchesTag;
     });
-  }, [recipes, search, selectedTag]);
+  }, [recipes, searchQuery, selectedTag]);
 
   async function loadRecipes() {
     setError('');
@@ -107,7 +117,6 @@ export function RecipeSection() {
           token,
         );
         setStatus('Rezept wurde aktualisiert.');
-        setEditing(null);
       } else {
         await apiFetch<Recipe>(
           '/recipes',
@@ -116,6 +125,8 @@ export function RecipeSection() {
         );
         setStatus('Rezept wurde gespeichert.');
       }
+      setEditing(null);
+      setIsEditorOpen(false);
       setSelectedRecipe(null);
       await loadRecipes();
     } catch (err) {
@@ -132,6 +143,7 @@ export function RecipeSection() {
       await apiFetch(`/recipes/${recipe.id}`, { method: 'DELETE' }, token);
       if (editing?.id === recipe.id) setEditing(null);
       if (selectedRecipe?.id === recipe.id) setSelectedRecipe(null);
+      if (editing?.id === recipe.id) setIsEditorOpen(false);
       await loadRecipes();
       setStatus('Rezept wurde gelöscht.');
     } catch (err) {
@@ -144,11 +156,13 @@ export function RecipeSection() {
   function openRecipeDetail(recipe: Recipe) {
     setSelectedRecipe(recipe);
     setEditing(null);
+    setIsEditorOpen(false);
   }
 
   function openRecipeEditor(recipe?: Recipe | null) {
     setSelectedRecipe(null);
     setEditing(recipe ?? null);
+    setIsEditorOpen(true);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
@@ -282,6 +296,18 @@ export function RecipeSection() {
     void refreshSelectedRecipeImageUrls(selectedRecipe);
   }, [recipePreviewImages, selectedRecipe, token]);
 
+  useEffect(() => {
+    if (createRequestVersion === 0) return;
+    openRecipeEditor();
+  }, [createRequestVersion]);
+
+  useEffect(() => {
+    if (overviewRequestVersion === 0) return;
+    setEditing(null);
+    setIsEditorOpen(false);
+    setSelectedRecipe(null);
+  }, [overviewRequestVersion]);
+
   return (
     <section aria-labelledby="recipes-heading">
       <div className="section-heading">
@@ -292,14 +318,6 @@ export function RecipeSection() {
         <div>
           <button type="button" onClick={() => void loadRecipes()} disabled={busy}>
             Neu laden
-          </button>
-          <button
-            type="button"
-            className="button-secondary"
-            onClick={() => openRecipeEditor()}
-            disabled={busy}
-          >
-            Neues Rezept
           </button>
         </div>
       </div>
@@ -313,189 +331,191 @@ export function RecipeSection() {
           {error}
         </div>
       )}
-      <div className="card">
-        <div className="section-heading compact">
-          <div>
-            <h3>Gespeicherte Rezepte</h3>
-            <p className="muted">
-              {visibleRecipes.length} von {recipes.length}
-            </p>
-          </div>
-          <label className="search-field">
-            Suchen
-            <input
-              type="search"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Name, Zutat oder Schlagwort"
-            />
-          </label>
-        </div>
-        {availableTags.length > 0 && (
-          <div className="category-row">
-            <button
-              type="button"
-              className={selectedTag === '' ? 'badge badge--active' : 'badge badge--ghost'}
-              onClick={() => setSelectedTag('')}
-            >
-              Alle
-            </button>
-            {availableTags.map((tag) => (
-              <button
-                key={tag}
-                type="button"
-                className={selectedTag === tag ? 'badge badge--active' : 'badge badge--ghost'}
-                onClick={() => setSelectedTag(tag)}
-              >
-                {tag}
-              </button>
-            ))}
-          </div>
-        )}
-        {visibleRecipes.length === 0 ? (
-          <p>Keine passenden Rezepte vorhanden.</p>
-        ) : (
-          <ul className="recipe-overview-grid">
-            {visibleRecipes.map((recipe) => {
-              const previewImageUrl =
-                recipe.recipe_image_key &&
-                recipePreviewImages[recipe.id]?.key === recipe.recipe_image_key
-                  ? recipePreviewImages[recipe.id]?.url
-                  : null;
-
-              return (
-                <li key={recipe.id}>
-                  <button
-                    type="button"
-                    className={
-                      selectedRecipe?.id === recipe.id
-                        ? 'recipe-overview-tile active'
-                        : 'recipe-overview-tile'
-                    }
-                    onClick={() => openRecipeDetail(recipe)}
-                  >
-                    {previewImageUrl && (
-                      <img
-                        className="recipe-overview-image"
-                        src={previewImageUrl}
-                        alt={`Vorschaubild ${recipe.title}`}
-                        loading="lazy"
-                      />
-                    )}
-                    {!previewImageUrl && (
-                      <div
-                        className="recipe-overview-image recipe-overview-image--placeholder"
-                        aria-hidden="true"
-                      />
-                    )}
-                    <span className="recipe-overview-title">{recipe.title}</span>
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </div>
-      {selectedRecipe && (
+      {!isEditorOpen && (
         <div className="card">
           <div className="section-heading compact">
             <div>
-              <h3>Rezept ansehen</h3>
-              <p className="muted">{selectedRecipe.title}</p>
+              <h3>{selectedRecipe ? 'Rezept ansehen' : 'Gespeicherte Rezepte'}</h3>
+              <p className="muted">
+                {visibleRecipes.length} von {recipes.length}
+              </p>
             </div>
-            <div className="button-row">
+            {selectedRecipe && (
               <button
                 type="button"
                 className="button-secondary"
-                onClick={() => openRecipeEditor(selectedRecipe)}
+                onClick={() => setSelectedRecipe(null)}
               >
-                Bearbeiten
+                Zur Übersicht
               </button>
+            )}
+          </div>
+          {availableTags.length > 0 && (
+            <div className="category-row">
               <button
-                className="button-danger"
                 type="button"
-                disabled={busy}
-                onClick={() => void deleteRecipe(selectedRecipe)}
+                className={selectedTag === '' ? 'badge badge--active' : 'badge badge--ghost'}
+                onClick={() => setSelectedTag('')}
               >
-                Löschen
+                Alle
               </button>
-            </div>
-          </div>
-          {selectedRecipe.description && <p>{selectedRecipe.description}</p>}
-          {recipeImageUrl && (
-            <img
-              className="recipe-detail-image"
-              src={recipeImageUrl}
-              alt={`Rezeptbild ${selectedRecipe.title}`}
-            />
-          )}
-          <div className="recipe-detail-meta">
-            <p>
-              <strong>Rezeptbücher:</strong> {selectedRecipe.group_ids.join(', ') || 'keine'}
-            </p>
-            <p>
-              <strong>Schlagwörter:</strong> {selectedRecipe.tags.join(', ') || 'keine'}
-            </p>
-            <p>
-              <strong>Portionen:</strong> {selectedRecipe.yield.amount} {selectedRecipe.yield.unit}
-            </p>
-            <p>
-              <strong>Vorbereitung:</strong> {selectedRecipe.time.preparation_minutes ?? '–'} min ·{' '}
-              <strong>Kochen:</strong> {selectedRecipe.time.cooking_minutes ?? '–'} min ·{' '}
-              <strong>Ruhen:</strong> {selectedRecipe.time.resting_minutes ?? '–'} min
-            </p>
-          </div>
-          {selectedRecipe.ingredient_sections.map((section) => (
-            <div key={section.id}>
-              <h4>{section.name ?? 'Zutaten'}</h4>
-              <ul>
-                {section.ingredients.map((ingredient, index) => (
-                  <li key={`${section.id}-${index}`}>
-                    {ingredient.amount
-                      ? `${ingredient.amount} ${getIngredientUnitLabel(ingredient.unit, ingredient.custom_unit)} `
-                      : ''}
-                    <strong>{ingredient.name}</strong>
-                    {ingredient.preparation ? `, ${ingredient.preparation}` : ''}
-                    {ingredient.optional ? ' (optional)' : ''}
-                    {ingredient.remarks ? ` — ${ingredient.remarks}` : ''}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
-          <div>
-            <h4>Zubereitung</h4>
-            <ol>
-              {selectedRecipe.instructions.map((step) => (
-                <li key={step.id}>
-                  {step.text}
-                  {stepImageUrls[step.id] && (
-                    <img
-                      className="recipe-step-image"
-                      src={stepImageUrls[step.id]}
-                      alt={`Schrittbild ${selectedRecipe.title}`}
-                    />
-                  )}
-                </li>
+              {availableTags.map((tag) => (
+                <button
+                  key={tag}
+                  type="button"
+                  className={selectedTag === tag ? 'badge badge--active' : 'badge badge--ghost'}
+                  onClick={() => setSelectedTag(tag)}
+                >
+                  {tag}
+                </button>
               ))}
-            </ol>
-          </div>
-          {selectedRecipe.remarks && (
-            <div>
-              <h4>Bemerkungen</h4>
-              <p>{selectedRecipe.remarks}</p>
             </div>
+          )}
+          {!selectedRecipe &&
+            (visibleRecipes.length === 0 ? (
+              <p>Keine passenden Rezepte vorhanden.</p>
+            ) : (
+              <ul className="recipe-overview-grid">
+                {visibleRecipes.map((recipe) => {
+                  const previewImageUrl =
+                    recipe.recipe_image_key &&
+                    recipePreviewImages[recipe.id]?.key === recipe.recipe_image_key
+                      ? recipePreviewImages[recipe.id]?.url
+                      : null;
+
+                  return (
+                    <li key={recipe.id}>
+                      <button
+                        type="button"
+                        aria-label={`Rezept anzeigen ${recipe.title}`}
+                        className="recipe-overview-tile"
+                        onClick={() => openRecipeDetail(recipe)}
+                      >
+                        {previewImageUrl && (
+                          <img
+                            className="recipe-overview-image"
+                            src={previewImageUrl}
+                            alt={`Vorschaubild ${recipe.title}`}
+                            loading="lazy"
+                          />
+                        )}
+                        {!previewImageUrl && (
+                          <div
+                            className="recipe-overview-image recipe-overview-image--placeholder"
+                            aria-hidden="true"
+                          />
+                        )}
+                        <span className="recipe-overview-title">{recipe.title}</span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            ))}
+
+          {selectedRecipe && (
+            <>
+              <p className="muted">{selectedRecipe.title}</p>
+              <div className="button-row">
+                <button
+                  type="button"
+                  className="button-secondary"
+                  onClick={() => openRecipeEditor(selectedRecipe)}
+                >
+                  Bearbeiten
+                </button>
+                <button
+                  className="button-danger"
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void deleteRecipe(selectedRecipe)}
+                >
+                  Löschen
+                </button>
+              </div>
+              {selectedRecipe.description && <p>{selectedRecipe.description}</p>}
+              {recipeImageUrl && (
+                <img
+                  className="recipe-detail-image"
+                  src={recipeImageUrl}
+                  alt={`Rezeptbild ${selectedRecipe.title}`}
+                />
+              )}
+              <div className="recipe-detail-meta">
+                <p>
+                  <strong>Rezeptbücher:</strong> {selectedRecipe.group_ids.join(', ') || 'keine'}
+                </p>
+                <p>
+                  <strong>Schlagwörter:</strong> {selectedRecipe.tags.join(', ') || 'keine'}
+                </p>
+                <p>
+                  <strong>Portionen:</strong> {selectedRecipe.yield.amount}{' '}
+                  {selectedRecipe.yield.unit}
+                </p>
+                <p>
+                  <strong>Vorbereitung:</strong> {selectedRecipe.time.preparation_minutes ?? '–'}{' '}
+                  min · <strong>Kochen:</strong> {selectedRecipe.time.cooking_minutes ?? '–'} min ·{' '}
+                  <strong>Ruhen:</strong> {selectedRecipe.time.resting_minutes ?? '–'} min
+                </p>
+              </div>
+              {selectedRecipe.ingredient_sections.map((section) => (
+                <div key={section.id}>
+                  <h4>{section.name ?? 'Zutaten'}</h4>
+                  <ul>
+                    {section.ingredients.map((ingredient, index) => (
+                      <li key={`${section.id}-${index}`}>
+                        {ingredient.amount
+                          ? `${ingredient.amount} ${getIngredientUnitLabel(ingredient.unit, ingredient.custom_unit)} `
+                          : ''}
+                        <strong>{ingredient.name}</strong>
+                        {ingredient.preparation ? `, ${ingredient.preparation}` : ''}
+                        {ingredient.optional ? ' (optional)' : ''}
+                        {ingredient.remarks ? ` — ${ingredient.remarks}` : ''}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+              <div>
+                <h4>Zubereitung</h4>
+                <ol>
+                  {selectedRecipe.instructions.map((step) => (
+                    <li key={step.id}>
+                      {step.text}
+                      {stepImageUrls[step.id] && (
+                        <img
+                          className="recipe-step-image"
+                          src={stepImageUrls[step.id]}
+                          alt={`Schrittbild ${selectedRecipe.title}`}
+                        />
+                      )}
+                    </li>
+                  ))}
+                </ol>
+              </div>
+              {selectedRecipe.remarks && (
+                <div>
+                  <h4>Bemerkungen</h4>
+                  <p>{selectedRecipe.remarks}</p>
+                </div>
+              )}
+            </>
           )}
         </div>
       )}
-      <RecipeEditor
-        recipe={editing}
-        busy={busy}
-        onSave={saveRecipe}
-        onCancel={() => setEditing(null)}
-        onUploadRecipeImage={uploadRecipeImage}
-        onUploadInstructionImage={uploadInstructionImage}
-      />
+      {isEditorOpen && (
+        <RecipeEditor
+          recipe={editing}
+          busy={busy}
+          onSave={saveRecipe}
+          onCancel={() => {
+            setEditing(null);
+            setIsEditorOpen(false);
+          }}
+          onUploadRecipeImage={uploadRecipeImage}
+          onUploadInstructionImage={uploadInstructionImage}
+        />
+      )}
     </section>
   );
 }
