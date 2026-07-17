@@ -35,6 +35,123 @@ body {
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.07);
 }
 
+.hero-main {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.hero-heading {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.hero-overview-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border-radius: 14px;
+  background: transparent;
+}
+
+.hero-overview-link:hover {
+  background: transparent;
+}
+
+.hero-overview-title {
+  font: inherit;
+  color: inherit;
+  font-weight: inherit;
+  text-align: left;
+}
+
+.hero-recipes-image {
+  display: block;
+  width: 72px;
+  height: 72px;
+  object-fit: cover;
+  border-radius: 14px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.15);
+}
+
+.header-toolbar {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.header-menu-wrapper {
+  position: relative;
+}
+
+.hamburger-button {
+  display: grid;
+  gap: 4px;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: #111827;
+  padding: 10px;
+  align-content: center;
+}
+
+.hamburger-button span {
+  display: block;
+  height: 2px;
+  background: #ffffff;
+  border-radius: 999px;
+}
+
+.header-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 10;
+  width: max-content;
+  min-width: 180px;
+  display: grid;
+  gap: 4px;
+  padding: 8px;
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  background: #ffffff;
+  box-shadow: 0 14px 28px rgba(0, 0, 0, 0.12);
+}
+
+.header-menu button {
+  text-align: left;
+  border-radius: 10px;
+  background: transparent;
+  color: #374151;
+}
+
+.header-menu button:hover,
+.header-menu button.active {
+  background: #111827;
+  color: #ffffff;
+}
+
+.recipe-toolbar-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.recipe-toolbar-actions input {
+  width: min(380px, calc(100vw - 180px));
+}
+
+.recipe-create-button {
+  min-width: 44px;
+  padding: 10px 0;
+  font-size: 22px;
+  line-height: 1;
+}
+
 .eyebrow {
   margin: 0 0 8px;
   text-transform: uppercase;
@@ -168,6 +285,28 @@ a {
 @media (max-width: 800px) {
   .hero {
     flex-direction: column;
+  }
+
+  .hero-heading {
+    align-items: flex-start;
+  }
+
+  .hero-recipes-image {
+    width: 60px;
+    height: 60px;
+  }
+
+  .header-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .recipe-toolbar-actions {
+    width: 100%;
+  }
+
+  .recipe-toolbar-actions input {
+    width: 100%;
   }
 
   .grid {

@@ -13,7 +13,7 @@ describe('RecipeSection', () => {
     mockedApiFetch.mockReset();
   });
 
-  it('renders ingredient and instruction summaries returned by the backend', async () => {
+  it('renders recipes returned by the backend in the overview list', async () => {
     mockedApiFetch.mockResolvedValueOnce([
       {
         id: 'recipe-1',
@@ -41,8 +41,8 @@ describe('RecipeSection', () => {
     ]);
     render(<RecipeSection />);
     await waitFor(() => expect(screen.getByText('Brot')).toBeInTheDocument());
-    expect(screen.getByText('Mehl')).toBeInTheDocument();
-    expect(screen.getByText('1 Schritte')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Rezept anzeigen Brot/i })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Neues Rezept' })).not.toBeInTheDocument();
   });
 
   it('shows recipe details when the list item is viewed', async () => {
@@ -75,7 +75,7 @@ describe('RecipeSection', () => {
     render(<RecipeSection />);
     await waitFor(() => expect(screen.getByText('Brot')).toBeInTheDocument());
 
-    fireEvent.click(screen.getByRole('button', { name: /Anzeigen/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Rezept anzeigen Brot/i }));
 
     const detailSection = screen.getByRole('heading', { name: 'Rezept ansehen' }).closest('.card');
     expect(detailSection).toBeInTheDocument();
@@ -132,7 +132,7 @@ describe('RecipeSection', () => {
       expect(previewImage.src).toContain('/api/recipes/images/recipes/recipe-1/cover/cover.jpg');
     });
 
-    fireEvent.click(screen.getByRole('button', { name: /Anzeigen/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Rezept anzeigen Brot/i }));
 
     await waitFor(() => {
       const recipeImage = screen.getByAltText('Rezeptbild Brot') as HTMLImageElement;
@@ -141,5 +141,36 @@ describe('RecipeSection', () => {
 
     const stepImage = screen.getByAltText('Schrittbild Brot') as HTMLImageElement;
     expect(stepImage.src).toContain('/api/recipes/images/recipes/recipe-1/steps/step-1/step.jpg');
+  });
+
+  it('returns to overview when overview request version changes', async () => {
+    mockedApiFetch.mockResolvedValueOnce([
+      {
+        id: 'recipe-1',
+        title: 'Brot',
+        description: 'Einfach',
+        group_ids: [],
+        tags: ['Backen'],
+        time: { preparation_minutes: 10, cooking_minutes: 40, resting_minutes: 60 },
+        yield: { amount: '1', unit: 'Laib' },
+        ingredient_sections: [],
+        instructions: [],
+        remarks: null,
+        created_at: '2026-07-12T12:00:00Z',
+        updated_at: '2026-07-12T12:00:00Z',
+        version: 1,
+      },
+    ]);
+
+    const { rerender } = render(<RecipeSection createRequestVersion={1} overviewRequestVersion={0} />);
+
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Neues Rezept' })).toBeInTheDocument());
+
+    rerender(<RecipeSection createRequestVersion={1} overviewRequestVersion={1} />);
+
+    await waitFor(() => {
+      expect(screen.queryByRole('heading', { name: 'Neues Rezept' })).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Rezept anzeigen Brot/i })).toBeInTheDocument();
+    });
   });
 });
