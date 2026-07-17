@@ -1,5 +1,5 @@
 import { ChangeEvent, FormEvent, useEffect, useState } from 'react';
-import { apiFetch, apiFetchText } from '../../api/client';
+import { API_BASE, apiFetch } from '../../api/client';
 import { useAuth } from '../../auth/AuthContext';
 import type {
   GroupRole,
@@ -210,6 +210,7 @@ export function AdminSection() {
     const extension = fileName.split('.').pop()?.toLowerCase();
     if (extension === 'yaml' || extension === 'yml') return 'yaml';
     if (extension === 'md' || extension === 'markdown') return 'markdown';
+    if (extension === 'zip') return 'zip';
     return null;
   }
 
@@ -226,7 +227,7 @@ export function AdminSection() {
     const format = getRecipeImportFormat(file.name);
     if (!format) {
       setRecipeImportFile(null);
-      setError('Bitte eine YAML- oder Markdown-Datei auswählen.');
+      setError('Bitte eine YAML-, Markdown- oder ZIP-Datei auswählen.');
       event.target.value = '';
       return;
     }
@@ -236,10 +237,14 @@ export function AdminSection() {
     setRecipeImportFile(file);
   }
 
-  async function getRecipeImportContent(): Promise<string | null> {
+  async function getRecipeImportPayload(): Promise<{ content?: string; archive?: File } | null> {
     if (!recipeImportFile) {
       setError('Bitte eine Import-Datei auswählen.');
       return null;
+    }
+
+    if (recipeImportFormat === 'zip') {
+      return { archive: recipeImportFile };
     }
 
     const content = (await recipeImportFile.text()).trim();
@@ -247,7 +252,30 @@ export function AdminSection() {
       setError('Die ausgewählte Import-Datei ist leer.');
       return null;
     }
-    return content;
+    return { content };
+  }
+
+  async function postRecipeImport<T>(path: string): Promise<T> {
+    const payload = await getRecipeImportPayload();
+    if (!payload) {
+      throw new Error('Import payload unavailable');
+    }
+
+    if (recipeImportFormat === 'zip') {
+      const formData = new FormData();
+      formData.append('format', recipeImportFormat);
+      formData.append('archive', payload.archive as File);
+      return apiFetch<T>(path, { method: 'POST', body: formData }, token);
+    }
+
+    return apiFetch<T>(
+      path,
+      {
+        method: 'POST',
+        body: JSON.stringify({ format: recipeImportFormat, content: payload.content }),
+      },
+      token,
+    );
   }
 
   async function exportRecipes(exportFormat: RecipeExportFormat): Promise<void> {
@@ -256,18 +284,19 @@ export function AdminSection() {
     setStatus('');
     try {
       const query = buildRecipeAdminQuery();
-      const content = await apiFetchText(
-        `/recipes/admin/export?format=${exportFormat}${query ? `&${query.slice(1)}` : ''}`,
-        {},
-        token,
+      const response = await fetch(
+        `${API_BASE}/recipes/admin/export?format=${exportFormat}${query ? `&${query.slice(1)}` : ''}`,
+        { headers: token ? { Authorization: `Bearer ${token}` } : undefined },
       );
+      if (!response.ok) {
+        throw new Error(await response.text());
+      }
       const now = new Date();
       const datePart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-      const extension = exportFormat === 'yaml' ? 'yaml' : 'md';
+      const extension =
+        exportFormat === 'yaml' ? 'yaml' : exportFormat === 'markdown' ? 'md' : 'zip';
       const fileName = `rezepte-export-${datePart}.${extension}`;
-      const blob = new Blob([content], {
-        type: exportFormat === 'yaml' ? 'application/x-yaml' : 'text/markdown',
-      });
+      const blob = await response.blob();
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement('a');
       anchor.href = url;
@@ -310,21 +339,11 @@ export function AdminSection() {
   }
 
   async function importRecipes(): Promise<void> {
-    const content = await getRecipeImportContent();
-    if (!content) return;
-
     setBusy(true);
     setError('');
     setStatus('');
     try {
-      const response = await apiFetch<RecipeImportResponse>(
-        '/recipes/admin/import',
-        {
-          method: 'POST',
-          body: JSON.stringify({ format: recipeImportFormat, content }),
-        },
-        token,
-      );
+      const response = await postRecipeImport<RecipeImportResponse>('/recipes/admin/import');
       setRecipeImportPreview(null);
       setStatus(
         `Import abgeschlossen: ${response.imported} verarbeitet (${response.created} neu, ${response.updated} aktualisiert).`,
@@ -337,20 +356,12 @@ export function AdminSection() {
   }
 
   async function previewImportRecipes(): Promise<void> {
-    const content = await getRecipeImportContent();
-    if (!content) return;
-
     setBusy(true);
     setError('');
     setStatus('');
     try {
-      const response = await apiFetch<RecipeImportPreviewResponse>(
+      const response = await postRecipeImport<RecipeImportPreviewResponse>(
         '/recipes/admin/import/preview',
-        {
-          method: 'POST',
-          body: JSON.stringify({ format: recipeImportFormat, content }),
-        },
-        token,
       );
       setRecipeImportPreview(response);
       setStatus(
@@ -602,6 +613,7 @@ export function AdminSection() {
               >
                 <option value="yaml">YAML</option>
                 <option value="markdown">Markdown</option>
+                <option value="zip">ZIP</option>
               </select>
             </label>
           </div>
@@ -619,6 +631,14 @@ export function AdminSection() {
             </button>
             <button
               type="button"
+              className="button-secondary"
+              disabled={busy}
+              onClick={() => void exportRecipes('zip')}
+            >
+              Export ZIP
+            </button>
+            <button
+              type="button"
               className="button-danger"
               disabled={busy}
               onClick={() => void purgeRecipes()}
@@ -630,7 +650,7 @@ export function AdminSection() {
             Import-Datei
             <input
               type="file"
-              accept=".yaml,.yml,.md,.markdown,application/x-yaml,text/yaml,text/markdown"
+              accept=".yaml,.yml,.md,.markdown,.zip,application/x-yaml,text/yaml,text/markdown,application/zip"
               onChange={selectRecipeImportFile}
             />
           </label>

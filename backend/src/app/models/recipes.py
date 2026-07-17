@@ -129,6 +129,7 @@ class RecipeOut(RecipeBase):
 class RecipeExportFormat(StrEnum):
     YAML = "yaml"
     MARKDOWN = "markdown"
+    ZIP = "zip"
 
 
 class RecipeImportRequest(BaseModel):
@@ -150,7 +151,8 @@ class RecipeImportPreviewResult(BaseModel):
 
 class RecipeExportImage(BaseModel):
     content_type: str = Field(min_length=1, max_length=120)
-    data: str = Field(min_length=1)
+    data: str | None = None
+    path: str | None = Field(default=None, max_length=500)
 
 
 class RecipeExportPayload(BaseModel):

@@ -1,6 +1,8 @@
 import base64
+import io
 import re
 import uuid
+import zipfile
 from datetime import datetime, timezone
 from typing import Any
 
@@ -16,7 +18,7 @@ from app.models.recipes import (
     RecipeUpdate,
 )
 from app.repositories.recipe_repository import RecipeRepository
-from app.services.image_service import ImageService
+from app.services.image_service import DownloadedImage, ImageService
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
 
@@ -71,14 +73,19 @@ class RecipeService:
         return await self.repository.delete_by_public_id(recipe_id)
 
     async def build_export_payload(
-        self, group_id: str | None = None
+        self,
+        group_id: str | None = None,
+        include_image_data: bool = True,
     ) -> RecipeExportPayload:
         documents = await self.repository.list_by_group(
             group_id=group_id,
             sort=[("updated_at", -1)],
         )
         recipes = [self._to_output(document) for document in documents]
-        images = await self._build_export_images(recipes)
+        images = await self._build_export_images(
+            recipes,
+            include_image_data=include_image_data,
+        )
         return RecipeExportPayload(
             export_schema="rezepte.recipes.export.v1",
             exported_at=datetime.now(timezone.utc),
@@ -92,13 +99,16 @@ class RecipeService:
         self,
         export_format: RecipeExportFormat,
         group_id: str | None = None,
-    ) -> str:
-        payload = await self.build_export_payload(group_id=group_id)
-        payload_yaml = yaml.safe_dump(
-            payload.model_dump(mode="json", by_alias=True),
-            sort_keys=False,
-            allow_unicode=False,
+    ) -> str | bytes:
+        if export_format == RecipeExportFormat.ZIP:
+            return await self._build_export_archive(group_id=group_id)
+
+        include_image_data = export_format != RecipeExportFormat.ZIP
+        payload = await self.build_export_payload(
+            group_id=group_id,
+            include_image_data=include_image_data,
         )
+        payload_yaml = self._dump_export_payload_yaml(payload)
 
         if export_format == RecipeExportFormat.YAML:
             return payload_yaml
@@ -122,11 +132,20 @@ class RecipeService:
 
     async def import_recipes(
         self,
-        content: str,
+        content: str | None,
         import_format: RecipeExportFormat,
+        archive_content: bytes | None = None,
     ) -> RecipeImportResult:
-        parsed_payload = self._parse_import_payload(content, import_format)
-        await self._restore_import_images(parsed_payload)
+        parsed_payload = self._parse_import_payload(
+            content=content,
+            import_format=import_format,
+            archive_content=archive_content,
+        )
+        await self._restore_import_images(
+            parsed_payload,
+            import_format=import_format,
+            archive_content=archive_content,
+        )
         documents = self._collect_import_documents(parsed_payload)
         created = 0
         updated = 0
@@ -146,10 +165,15 @@ class RecipeService:
 
     async def preview_import_recipes(
         self,
-        content: str,
+        content: str | None,
         import_format: RecipeExportFormat,
+        archive_content: bytes | None = None,
     ) -> RecipeImportPreviewResult:
-        parsed_payload = self._parse_import_payload(content, import_format)
+        parsed_payload = self._parse_import_payload(
+            content=content,
+            import_format=import_format,
+            archive_content=archive_content,
+        )
         documents = self._collect_import_documents(parsed_payload)
         simulated_existing_ids: set[str] = set()
         would_create = 0
@@ -185,8 +209,29 @@ class RecipeService:
         return code_fence_match.group(1).strip() if code_fence_match else content
 
     def _parse_import_payload(
-        self, content: str, import_format: RecipeExportFormat
+        self,
+        content: str | None,
+        import_format: RecipeExportFormat,
+        archive_content: bytes | None = None,
     ) -> dict[str, Any]:
+        if import_format == RecipeExportFormat.ZIP:
+            if archive_content is None:
+                raise ValueError("ZIP import requires archive content")
+            with zipfile.ZipFile(io.BytesIO(archive_content)) as archive:
+                try:
+                    yaml_content = archive.read("manifest.yaml").decode("utf-8")
+                except KeyError as exc:
+                    raise ValueError("ZIP archive must contain manifest.yaml") from exc
+                parsed = yaml.safe_load(yaml_content)
+                if not isinstance(parsed, dict):
+                    raise ValueError(
+                        "Import content must describe an object at top level"
+                    )
+                return parsed
+
+        if content is None:
+            raise ValueError("Import content is required")
+
         yaml_content = (
             self._extract_yaml_from_markdown(content)
             if import_format == RecipeExportFormat.MARKDOWN
@@ -203,7 +248,9 @@ class RecipeService:
         return ImageService(self.s3_client, self.settings)
 
     async def _build_export_images(
-        self, recipes: list[RecipeOut]
+        self,
+        recipes: list[RecipeOut],
+        include_image_data: bool = True,
     ) -> dict[str, RecipeExportImage]:
         image_keys: set[str] = set()
         for recipe in recipes:
@@ -222,11 +269,84 @@ class RecipeService:
             downloaded = await image_service.download_image(key)
             images[key] = RecipeExportImage(
                 content_type=downloaded.content_type,
-                data=base64.b64encode(downloaded.content).decode("ascii"),
+                data=(
+                    base64.b64encode(downloaded.content).decode("ascii")
+                    if include_image_data
+                    else None
+                ),
+                path=None if include_image_data else f"images/{key}",
             )
         return images
 
-    async def _restore_import_images(self, parsed_payload: dict[str, Any]) -> None:
+    def _dump_export_payload_yaml(self, payload: RecipeExportPayload) -> str:
+        return yaml.safe_dump(
+            payload.model_dump(mode="json", by_alias=True, exclude_none=True),
+            sort_keys=False,
+            allow_unicode=False,
+        )
+
+    async def _build_export_archive(self, group_id: str | None = None) -> bytes:
+        documents = await self.repository.list_by_group(
+            group_id=group_id,
+            sort=[("updated_at", -1)],
+        )
+        recipes = [self._to_output(document) for document in documents]
+        downloaded_images = await self._download_export_images(recipes)
+        payload = RecipeExportPayload(
+            export_schema="rezepte.recipes.export.v1",
+            exported_at=datetime.now(timezone.utc),
+            count=len(recipes),
+            filters={"group_id": group_id},
+            recipes=recipes,
+            images={
+                key: RecipeExportImage(
+                    content_type=image.content_type, path=f"images/{key}"
+                )
+                for key, image in downloaded_images.items()
+            },
+        )
+
+        archive_buffer = io.BytesIO()
+        manifest_yaml = self._dump_export_payload_yaml(payload)
+
+        with zipfile.ZipFile(
+            archive_buffer,
+            mode="w",
+            compression=zipfile.ZIP_DEFLATED,
+        ) as archive:
+            archive.writestr("manifest.yaml", manifest_yaml)
+            for key, downloaded in downloaded_images.items():
+                archive.writestr(f"images/{key}", downloaded.content)
+
+        return archive_buffer.getvalue()
+
+    async def _download_export_images(
+        self,
+        recipes: list[RecipeOut],
+    ) -> dict[str, DownloadedImage]:
+        image_keys: set[str] = set()
+        for recipe in recipes:
+            if recipe.recipe_image_key:
+                image_keys.add(recipe.recipe_image_key)
+            for step in recipe.instructions:
+                if step.image_key:
+                    image_keys.add(step.image_key)
+
+        if not image_keys:
+            return {}
+
+        image_service = self._require_image_service()
+        images: dict[str, DownloadedImage] = {}
+        for key in sorted(image_keys):
+            images[key] = await image_service.download_image(key)
+        return images
+
+    async def _restore_import_images(
+        self,
+        parsed_payload: dict[str, Any],
+        import_format: RecipeExportFormat,
+        archive_content: bytes | None = None,
+    ) -> None:
         raw_images = parsed_payload.get("images", {})
         if raw_images is None:
             return
@@ -236,28 +356,54 @@ class RecipeService:
             return
 
         image_service = self._require_image_service()
-        for key, raw_image in raw_images.items():
-            if not isinstance(key, str) or not isinstance(raw_image, dict):
-                raise ValueError(
-                    "Each exported image must be an object keyed by its storage key"
+        archive = None
+        if import_format == RecipeExportFormat.ZIP:
+            if archive_content is None:
+                raise ValueError("ZIP import requires archive content")
+            archive = zipfile.ZipFile(io.BytesIO(archive_content))
+
+        try:
+            for key, raw_image in raw_images.items():
+                if not isinstance(key, str) or not isinstance(raw_image, dict):
+                    raise ValueError(
+                        "Each exported image must be an object keyed by its storage key"
+                    )
+                content_type = raw_image.get("content_type")
+                data = raw_image.get("data")
+                path = raw_image.get("path")
+                if not isinstance(content_type, str) or not content_type:
+                    raise ValueError(
+                        f"Exported image {key} is missing a valid content_type"
+                    )
+
+                if isinstance(data, str) and data:
+                    try:
+                        content = base64.b64decode(data, validate=True)
+                    except ValueError as exc:
+                        raise ValueError(
+                            f"Exported image {key} is not valid base64 data"
+                        ) from exc
+                else:
+                    if archive is None:
+                        raise ValueError(
+                            f"Exported image {key} does not contain inline data"
+                        )
+                    image_path = (
+                        path if isinstance(path, str) and path else f"images/{key}"
+                    )
+                    try:
+                        content = archive.read(image_path)
+                    except KeyError as exc:
+                        raise ValueError(
+                            f"Exported image {key} is missing from the ZIP archive"
+                        ) from exc
+
+                await image_service.restore_image(
+                    key=key, content=content, content_type=content_type
                 )
-            content_type = raw_image.get("content_type")
-            data = raw_image.get("data")
-            if not isinstance(content_type, str) or not content_type:
-                raise ValueError(
-                    f"Exported image {key} is missing a valid content_type"
-                )
-            if not isinstance(data, str) or not data:
-                raise ValueError(f"Exported image {key} is missing image data")
-            try:
-                content = base64.b64decode(data, validate=True)
-            except ValueError as exc:
-                raise ValueError(
-                    f"Exported image {key} is not valid base64 data"
-                ) from exc
-            await image_service.restore_image(
-                key=key, content=content, content_type=content_type
-            )
+        finally:
+            if archive is not None:
+                archive.close()
 
     def _normalize_import_recipe(self, raw_recipe: dict[str, Any]) -> dict[str, Any]:
         if "id" in raw_recipe:
