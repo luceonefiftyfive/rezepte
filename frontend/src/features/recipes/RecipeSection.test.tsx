@@ -124,6 +124,59 @@ describe('RecipeSection', () => {
     expect(detailSection).toHaveTextContent('Frisch servieren.');
   });
 
+  it('requests recipes again when the sort order changes', async () => {
+    mockGroups();
+    mockedApiFetch
+      .mockResolvedValueOnce([
+        {
+          id: 'recipe-1',
+          title: 'Brot',
+          description: 'Einfach',
+          group_ids: ['family'],
+          tags: ['Backen'],
+          time: { preparation_minutes: 10, cooking_minutes: 40, resting_minutes: 60 },
+          yield: { amount: '1', unit: 'Laib' },
+          ingredient_sections: [],
+          instructions: [],
+          remarks: null,
+          created_at: '2026-07-12T12:00:00Z',
+          updated_at: '2026-07-12T12:00:00Z',
+          version: 1,
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          id: 'recipe-2',
+          title: 'Apfelmus',
+          description: 'Alphabetisch',
+          group_ids: ['family'],
+          tags: ['Dessert'],
+          time: { preparation_minutes: 5, cooking_minutes: 15, resting_minutes: 0 },
+          yield: { amount: '2', unit: 'Gläser' },
+          ingredient_sections: [],
+          instructions: [],
+          remarks: null,
+          created_at: '2026-07-13T12:00:00Z',
+          updated_at: '2026-07-13T12:00:00Z',
+          version: 1,
+        },
+      ]);
+
+    render(<RecipeSection />);
+    await waitFor(() => expect(screen.getByText('Brot')).toBeInTheDocument());
+
+    fireEvent.change(screen.getByLabelText('Rezeptsortierung'), {
+      target: { value: 'title_asc' },
+    });
+
+    await waitFor(() => expect(screen.getByText('Apfelmus')).toBeInTheDocument());
+    expect(mockedApiFetch).toHaveBeenCalledWith(
+      '/recipes?sort=title_asc&group_ids=recipes%2Cfamily',
+      {},
+      'test-token',
+    );
+  });
+
   it('renders recipe and step images when signed URLs are available', async () => {
     mockGroups();
     mockedApiFetch

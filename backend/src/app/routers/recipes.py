@@ -13,7 +13,7 @@ from app.models.recipes import (
 from app.models.user import Role
 from app.routers.users import get_current_user, require_admin_or_super_admin
 from app.services.image_service import ImageService
-from app.services.recipe_service import RecipeService
+from app.services.recipe_service import RecipeListSort, RecipeService
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
 from fastapi.responses import PlainTextResponse, Response
 from motor.motor_asyncio import AsyncIOMotorDatabase
@@ -102,11 +102,13 @@ async def list_recipes(
     db: Annotated[AsyncIOMotorDatabase, Depends(get_db)],
     current_user: Annotated[dict, Depends(get_current_user)],
     group_ids: str | None = None,
+    sort: RecipeListSort = RecipeListSort.CREATED_DESC,
 ) -> list[RecipeOut]:
     selected_group_ids = _parse_group_ids(group_ids)
     if current_user.get("is_super_admin", False):
         return await RecipeService(db).list_recipes(
-            group_ids=sorted(selected_group_ids) if selected_group_ids else None
+            group_ids=sorted(selected_group_ids) if selected_group_ids else None,
+            sort=sort,
         )
 
     assigned_group_ids = _assigned_group_ids(current_user)
@@ -121,7 +123,10 @@ async def list_recipes(
         )
 
     effective_group_ids = selected_group_ids or assigned_group_ids
-    return await RecipeService(db).list_recipes(group_ids=sorted(effective_group_ids))
+    return await RecipeService(db).list_recipes(
+        group_ids=sorted(effective_group_ids),
+        sort=sort,
+    )
 
 
 @router.get("/admin/export", response_model=None)

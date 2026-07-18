@@ -4,6 +4,7 @@ import { useAuth } from '../../auth/AuthContext';
 import type {
   Group,
   ImageUploadResponse,
+  RecipeListSort,
   Recipe,
   RecipePayload,
   SignedImageUrlResponse,
@@ -67,6 +68,7 @@ export function RecipeSection({
   const { token, mayEditRecipes } = useAuth();
   const lastLoadedRecipeSelectionRef = useRef<string | null>(null);
   const [recipes, setRecipes] = useState<Recipe[]>([]);
+  const [recipeSort, setRecipeSort] = useState<RecipeListSort>('created_desc');
   const [availableGroups, setAvailableGroups] = useState<Group[]>([]);
   const [manageableGroups, setManageableGroups] = useState<Group[]>([]);
   const [selectedViewGroupIds, setSelectedViewGroupIds] = useState<string[]>([]);
@@ -105,14 +107,19 @@ export function RecipeSection({
     });
   }, [recipes, searchQuery, selectedTag]);
 
-  function getRecipeSelectionKey(groupIds: string[], groups: Group[]): string {
+  function getRecipeSelectionKey(
+    groupIds: string[],
+    groups: Group[],
+    sort: RecipeListSort,
+  ): string {
     const queryKey = groups.length > 1 ? groupIds.slice().sort().join(',') : '__all__';
-    return `${token ?? 'anonymous'}:${queryKey}`;
+    return `${token ?? 'anonymous'}:${queryKey}:${sort}`;
   }
 
   async function loadRecipes(
     groupIds = selectedViewGroupIds,
     groups = availableGroups,
+    sort = recipeSort,
     options: { force?: boolean } = {},
   ) {
     setError('');
@@ -129,16 +136,18 @@ export function RecipeSection({
       return;
     }
 
-    const selectionKey = getRecipeSelectionKey(groupIds, groups);
+    const selectionKey = getRecipeSelectionKey(groupIds, groups, sort);
     if (!options.force && lastLoadedRecipeSelectionRef.current === selectionKey) {
       return;
     }
 
     try {
-      const query =
-        groups.length > 1 && groupIds.length > 0
-          ? `?group_ids=${encodeURIComponent(groupIds.join(','))}`
-          : '';
+      const params = new URLSearchParams();
+      params.set('sort', sort);
+      if (groups.length > 1 && groupIds.length > 0) {
+        params.set('group_ids', groupIds.join(','));
+      }
+      const query = params.size > 0 ? `?${params.toString()}` : '';
       setRecipes(await apiFetch<Recipe[]>(`/recipes${query}`, {}, token));
       lastLoadedRecipeSelectionRef.current = selectionKey;
     } catch (err) {
@@ -167,7 +176,7 @@ export function RecipeSection({
       setManageableGroups(editGroups);
       setSelectedViewGroupIds(nextSelectedViewGroupIds);
 
-      await loadRecipes(nextSelectedViewGroupIds, viewGroups);
+      await loadRecipes(nextSelectedViewGroupIds, viewGroups, recipeSort);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unbekannter Fehler');
     }
@@ -315,8 +324,8 @@ export function RecipeSection({
 
   useEffect(() => {
     if (availableGroups.length === 0) return;
-    void loadRecipes(selectedViewGroupIds, availableGroups);
-  }, [token, availableGroups, selectedViewGroupIds]);
+    void loadRecipes(selectedViewGroupIds, availableGroups, recipeSort);
+  }, [token, availableGroups, selectedViewGroupIds, recipeSort]);
 
   useEffect(() => {
     let active = true;
@@ -399,7 +408,11 @@ export function RecipeSection({
         <div>
           <button
             type="button"
-            onClick={() => void loadRecipes(selectedViewGroupIds, availableGroups, { force: true })}
+            onClick={() =>
+              void loadRecipes(selectedViewGroupIds, availableGroups, recipeSort, {
+                force: true,
+              })
+            }
             disabled={busy}
           >
             Neu laden
@@ -456,15 +469,29 @@ export function RecipeSection({
                 {visibleRecipes.length} von {recipes.length}
               </p>
             </div>
-            {selectedRecipe && (
-              <button
-                type="button"
-                className="button-secondary"
-                onClick={() => setSelectedRecipe(null)}
-              >
-                Zur Übersicht
-              </button>
-            )}
+            <div className="recipe-toolbar-actions">
+              {!selectedRecipe && (
+                <label>
+                  <select
+                    aria-label="Rezeptsortierung"
+                    value={recipeSort}
+                    onChange={(event) => setRecipeSort(event.target.value as RecipeListSort)}
+                  >
+                    <option value="created_desc">Nach Erstellung</option>
+                    <option value="title_asc">Alphabetisch</option>
+                  </select>
+                </label>
+              )}
+              {selectedRecipe && (
+                <button
+                  type="button"
+                  className="button-secondary"
+                  onClick={() => setSelectedRecipe(null)}
+                >
+                  Zur Übersicht
+                </button>
+              )}
+            </div>
           </div>
           {availableTags.length > 0 && (
             <div className="category-row">
