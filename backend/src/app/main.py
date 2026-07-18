@@ -7,13 +7,15 @@ from contextlib import asynccontextmanager
 import boto3
 from app.core.database import get_mongo_client
 from app.core.settings import Settings
+from app.repositories.group_repository import GroupRepository
+from app.routers.groups import router as groups_router
+from app.routers.recipes import router as recipes_router
 from app.routers.users import (
     get_current_user,
     require_admin_or_super_admin,
     require_super_admin,
 )
 from app.routers.users import router as users_router
-from app.routers.recipes import router as recipes_router
 from app.services.user_service import UserService
 from botocore.client import Config
 from botocore.exceptions import BotoCoreError, ClientError
@@ -22,7 +24,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from pymongo.errors import PyMongoError
 
 log = logging.getLogger(__name__)
-
 
 
 def configure_logging() -> None:
@@ -55,6 +56,7 @@ async def lifespan(app: FastAPI):
 
     # Bootstrap superuser if not exists
     await UserService(app.state.db).bootstrap_superuser()
+    await GroupRepository(app.state.db).ensure_indexes()
 
     yield
 
@@ -79,6 +81,7 @@ app.add_middleware(
 
 app.include_router(users_router)
 app.include_router(recipes_router)
+app.include_router(groups_router)
 
 
 @app.get("/")

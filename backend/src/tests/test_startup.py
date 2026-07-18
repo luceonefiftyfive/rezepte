@@ -8,6 +8,14 @@ from fastapi import FastAPI
 
 @pytest.mark.anyio
 async def test_lifespan_bootstraps_superuser(monkeypatch):
+    class FakeCollection:
+        async def create_index(self, *args, **kwargs):
+            return None
+
+    class FakeDatabase:
+        def __getitem__(self, name):
+            return FakeCollection()
+
     class FakeMongoClient:
         def __init__(self, db):
             self.db = db
@@ -18,7 +26,7 @@ async def test_lifespan_bootstraps_superuser(monkeypatch):
         async def close(self):
             return None
 
-    fake_db = object()
+    fake_db = FakeDatabase()
     fake_client = FakeMongoClient(fake_db)
     bootstrap_superuser = AsyncMock()
 

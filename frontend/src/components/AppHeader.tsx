@@ -21,7 +21,7 @@ export function AppHeader({
   onRecipeSearchChange,
   onRequestCreateRecipe,
 }: AppHeaderProps) {
-  const { user, logout, mayManageUsers, isAuthenticated } = useAuth();
+  const { user, logout, mayManageUsers, isAuthenticated, mayEditRecipes } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
 
   function selectSection(section: Section) {
@@ -114,13 +114,15 @@ export function AppHeader({
 
           {showRecipeActions && (
             <div className="recipe-toolbar-actions">
-              <button
-                type="button"
-                className="recipe-create-button"
-                onClick={onRequestCreateRecipe}
-              >
-                +
-              </button>
+              {mayEditRecipes && (
+                <button
+                  type="button"
+                  className="recipe-create-button"
+                  onClick={onRequestCreateRecipe}
+                >
+                  +
+                </button>
+              )}
               <input
                 type="search"
                 aria-label="Rezepte durchsuchen"

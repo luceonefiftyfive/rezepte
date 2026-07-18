@@ -94,6 +94,8 @@ async def test_system_checks_reports_dependency_failures(client, monkeypatch):
 
 @pytest.mark.anyio
 async def test_recipe_create_get_list_update_and_delete(client):
+    admin_token = await _login_token(client)
+    headers = {"Authorization": f"Bearer {admin_token}"}
     payload = {
         "title": "Kartoffelsuppe",
         "description": "Ein Familienrezept",
@@ -136,7 +138,7 @@ async def test_recipe_create_get_list_update_and_delete(client):
         "remarks": "Am nächsten Tag besonders gut.",
     }
 
-    created_response = await client.post("/recipes", json=payload)
+    created_response = await client.post("/recipes", json=payload, headers=headers)
     assert created_response.status_code == 201
     created = created_response.json()
     assert created["title"] == "Kartoffelsuppe"
@@ -145,11 +147,11 @@ async def test_recipe_create_get_list_update_and_delete(client):
     assert created["instructions"][1]["text"].startswith("Alles")
     assert created["version"] == 1
 
-    get_response = await client.get(f"/recipes/{created['id']}")
+    get_response = await client.get(f"/recipes/{created['id']}", headers=headers)
     assert get_response.status_code == 200
     assert get_response.json() == created
 
-    list_response = await client.get("/recipes")
+    list_response = await client.get("/recipes", headers=headers)
     assert list_response.status_code == 200
     assert [item["id"] for item in list_response.json()] == [created["id"]]
 
@@ -161,6 +163,7 @@ async def test_recipe_create_get_list_update_and_delete(client):
             + [{"id": "step-3", "text": "Suppe pürieren."}],
             "version": 1,
         },
+        headers=headers,
     )
     assert update_response.status_code == 200
     updated = update_response.json()
@@ -171,25 +174,33 @@ async def test_recipe_create_get_list_update_and_delete(client):
     conflict = await client.put(
         f"/recipes/{created['id']}",
         json={"title": "Veraltete Änderung", "version": 1},
+        headers=headers,
     )
     assert conflict.status_code == 409
 
-    deleted = await client.delete(f"/recipes/{created['id']}")
+    deleted = await client.delete(f"/recipes/{created['id']}", headers=headers)
     assert deleted.status_code == 200
     assert deleted.json() == {"ok": True, "deleted_id": created["id"]}
-    assert (await client.get(f"/recipes/{created['id']}")).status_code == 404
+    assert (
+        await client.get(f"/recipes/{created['id']}", headers=headers)
+    ).status_code == 404
 
 
 @pytest.mark.anyio
 async def test_recipe_validation(client):
+    admin_token = await _login_token(client)
+    headers = {"Authorization": f"Bearer {admin_token}"}
     base = {
         "title": "Test",
         "yield": {"amount": "2", "unit": "Portionen"},
+        "group_ids": ["recipes"],
         "ingredient_sections": [],
         "instructions": [],
     }
 
-    empty_title = await client.post("/recipes", json=base | {"title": ""})
+    empty_title = await client.post(
+        "/recipes", json=base | {"title": ""}, headers=headers
+    )
     assert empty_title.status_code == 422
 
     missing_custom_unit = await client.post(
@@ -203,6 +214,7 @@ async def test_recipe_validation(client):
                 }
             ]
         },
+        headers=headers,
     )
     assert missing_custom_unit.status_code == 422
 
@@ -215,6 +227,7 @@ async def test_recipe_validation(client):
                 {"id": "same", "text": "Zweiter Schritt"},
             ]
         },
+        headers=headers,
     )
     assert duplicate_steps.status_code == 422
 
@@ -280,7 +293,7 @@ async def test_recipe_admin_export_import_and_purge(client):
         "remarks": None,
     }
 
-    created = await client.post("/recipes", json=payload)
+    created = await client.post("/recipes", json=payload, headers=headers)
     assert created.status_code == 201
 
     yaml_export = await client.get(
@@ -398,7 +411,7 @@ async def test_recipe_admin_export_import_and_purge(client):
     assert import_markdown.status_code == 200
     assert import_markdown.json()["imported"] == 1
 
-    listed = await client.get("/recipes")
+    listed = await client.get("/recipes", headers=headers)
     assert listed.status_code == 200
     assert len(listed.json()) == 1
 
@@ -510,10 +523,12 @@ async def test_image_upload_maps_s3_client_error_to_http_500(client):
 
 @pytest.mark.anyio
 async def test_recipe_scoped_image_upload_and_view_url(client):
+    admin_token = await _login_token(client)
+    headers = {"Authorization": f"Bearer {admin_token}"}
     create_payload = {
         "title": "Bildtest",
         "description": None,
-        "group_ids": [],
+        "group_ids": ["recipes"],
         "tags": [],
         "time": {
             "preparation_minutes": 1,
@@ -525,13 +540,14 @@ async def test_recipe_scoped_image_upload_and_view_url(client):
         "instructions": [{"id": "step-1", "text": "Teig kneten."}],
         "remarks": None,
     }
-    created = await client.post("/recipes", json=create_payload)
+    created = await client.post("/recipes", json=create_payload, headers=headers)
     assert created.status_code == 201
     recipe = created.json()
 
     upload_cover = await client.post(
         f"/recipes/{recipe['id']}/images/upload",
         files={"file": ("cover.jpg", b"jpeg-content", "image/jpeg")},
+        headers=headers,
     )
     assert upload_cover.status_code == 200
     cover = upload_cover.json()
@@ -543,6 +559,7 @@ async def test_recipe_scoped_image_upload_and_view_url(client):
     upload_step = await client.post(
         f"/recipes/{recipe['id']}/instructions/step-1/image/upload",
         files={"file": ("step.jpg", b"jpeg-content", "image/jpeg")},
+        headers=headers,
     )
     assert upload_step.status_code == 200
     step = upload_step.json()
@@ -560,10 +577,11 @@ async def test_recipe_scoped_image_upload_and_view_url(client):
             ],
             "version": recipe["version"],
         },
+        headers=headers,
     )
     assert update.status_code == 200
 
-    cover_url = await client.get(f"/recipes/{recipe['id']}/image-url")
+    cover_url = await client.get(f"/recipes/{recipe['id']}/image-url", headers=headers)
     assert cover_url.status_code == 200
     assert cover_url.json()["key"] == cover["key"]
     assert cover_url.json()["view_url"] == cover["view_url"]
@@ -576,7 +594,8 @@ async def test_recipe_scoped_image_upload_and_view_url(client):
     assert streamed_cover.content == b"jpeg-content"
 
     step_url = await client.get(
-        f"/recipes/{recipe['id']}/instructions/step-1/image-url"
+        f"/recipes/{recipe['id']}/instructions/step-1/image-url",
+        headers=headers,
     )
     assert step_url.status_code == 200
     assert step_url.json()["key"] == step["key"]

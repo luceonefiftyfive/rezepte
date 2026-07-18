@@ -17,10 +17,15 @@ class RecipeRepository(MongoRepository[RecipeDocument]):
         return await self.find_one({"id": recipe_id})
 
     async def list_by_group(
-        self, group_id: str | None = None, sort: list[tuple[str, int]] | None = None
+        self,
+        group_id: str | None = None,
+        group_ids: list[str] | None = None,
+        sort: list[tuple[str, int]] | None = None,
     ) -> list[RecipeDocument]:
         query: dict[str, Any] = {}
-        if group_id:
+        if group_ids:
+            query["group_ids"] = {"$in": group_ids}
+        elif group_id:
             query["group_ids"] = group_id
         return await self.list(query=query, sort=sort)
 
@@ -44,6 +49,14 @@ class RecipeRepository(MongoRepository[RecipeDocument]):
     async def purge_by_group(self, group_id: str) -> int:
         result = await self.collection.delete_many({"group_ids": group_id})
         return result.deleted_count
+
+    async def remove_group_references(self, group_id: str) -> tuple[int, int]:
+        updated = await self.collection.update_many(
+            {"group_ids": group_id},
+            {"$pull": {"group_ids": group_id}},
+        )
+        deleted = await self.collection.delete_many({"group_ids": {"$size": 0}})
+        return updated.modified_count, deleted.deleted_count
 
     async def upsert_by_public_id(
         self, recipe_id: str, values: dict[str, Any]

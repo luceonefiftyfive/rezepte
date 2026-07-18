@@ -733,6 +733,20 @@ textarea {
   background: #ffffff;
   box-shadow: 0 24px 48px rgba(0, 0, 0, 0.2);
 }
+.recipe-group-selector {
+  display: grid;
+  gap: 8px;
+}
+.group-picker-list {
+  display: grid;
+  gap: 8px;
+  max-height: 280px;
+  overflow: auto;
+  padding: 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  background: #f9fafb;
+}
 .label-help {
   font-weight: 400;
   color: #6b7280;
