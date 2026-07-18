@@ -4,6 +4,7 @@ from unittest.mock import Mock
 from urllib.parse import urlsplit
 
 import pytest
+from app import main as main_module
 from app.main import app, settings
 from botocore.exceptions import ClientError
 
@@ -90,6 +91,25 @@ async def test_system_checks_reports_dependency_failures(client, monkeypatch):
     assert data["s3"]["ok"] is False
     assert data["s3"]["error"] == "s3 unavailable"
     assert data["ok"] is False
+
+
+@pytest.mark.anyio
+async def test_system_version_returns_configured_values(client, monkeypatch):
+    monkeypatch.setattr(
+        main_module,
+        "get_system_version",
+        lambda: {"version": "1.2.3", "git_hash": "abc1234"},
+    )
+
+    response = await client.get("/system/version")
+    assert response.status_code == 200
+    assert response.json() == {"version": "1.2.3", "git_hash": "abc1234"}
+
+
+@pytest.mark.anyio
+async def test_read_git_hash_prefers_env(monkeypatch):
+    monkeypatch.setenv("REZEPTE_GIT_HASH", "from-env-hash")
+    assert main_module._read_git_hash() == "from-env-hash"
 
 
 @pytest.mark.anyio

@@ -31,11 +31,13 @@ fi
 
 export REZEPTE_ENV_FILE="$ENV_FILE"
 export REZEPTE_SECRETS_FILE="$SECRETS_FILE"
+export REZEPTE_GIT_HASH="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
 
 echo "Familienrezepte mode: $MODE"
 echo "Env file: $ENV_FILE"
 echo "Secrets file: $SECRETS_FILE"
 echo "Compose override: $OVERRIDE_FILE"
+echo "Git hash for build: $REZEPTE_GIT_HASH"
 
 exec docker compose \
   --env-file "$ENV_FILE" \

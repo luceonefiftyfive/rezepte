@@ -1,8 +1,11 @@
 import asyncio
 import logging
+import os
+import subprocess
 import typing as ty
 import uuid
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 import boto3
 from app.core.database import get_mongo_client
@@ -22,6 +25,7 @@ from botocore.exceptions import BotoCoreError, ClientError
 from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pymongo.errors import PyMongoError
+from yaml import YAMLError, safe_load
 
 log = logging.getLogger(__name__)
 
@@ -34,6 +38,66 @@ def configure_logging() -> None:
 
 
 configure_logging()
+
+
+def _find_version_file() -> Path | None:
+    """Search for version.yaml from cwd and source tree parents."""
+    roots: list[Path] = [Path.cwd(), *Path(__file__).resolve().parents]
+    seen: set[Path] = set()
+    for root in roots:
+        candidate = (root / "version.yaml").resolve()
+        if candidate in seen:
+            continue
+        seen.add(candidate)
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def _read_configured_version() -> str:
+    version_file = _find_version_file()
+    if not version_file:
+        return "unknown"
+
+    try:
+        payload = safe_load(version_file.read_text(encoding="utf-8"))
+    except (OSError, YAMLError):
+        return "unknown"
+
+    if not isinstance(payload, dict):
+        return "unknown"
+
+    version = payload.get("version")
+    if isinstance(version, str) and version.strip():
+        return version.strip()
+    return "unknown"
+
+
+def _read_git_hash() -> str:
+    env_hash = os.getenv("REZEPTE_GIT_HASH", "").strip()
+    if env_hash:
+        return env_hash
+
+    version_file = _find_version_file()
+    search_root = version_file.parent if version_file else Path.cwd()
+
+    try:
+        output = subprocess.check_output(
+            ["git", "rev-parse", "--short", "HEAD"],
+            cwd=search_root,
+            text=True,
+            stderr=subprocess.DEVNULL,
+        )
+    except (OSError, subprocess.CalledProcessError):
+        return "unknown"
+    return output.strip() or "unknown"
+
+
+def get_system_version() -> dict[str, str]:
+    return {
+        "version": _read_configured_version(),
+        "git_hash": _read_git_hash(),
+    }
 
 
 def create_s3_client():
@@ -141,6 +205,11 @@ async def system_checks() -> dict[str, ty.Any]:
     checks["ok"] = all(checks[name]["ok"] for name in ["api", "mongo_db", "s3"])
 
     return checks
+
+
+@app.get("/system/version")
+async def system_version() -> dict[str, str]:
+    return get_system_version()
 
 
 @app.post("/images/test-upload")

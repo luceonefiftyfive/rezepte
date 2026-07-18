@@ -134,6 +134,44 @@ body {
   color: #ffffff;
 }
 
+.menu-version-box {
+  margin-top: 4px;
+  padding: 10px;
+  border-top: 1px solid #e5e7eb;
+  display: grid;
+  gap: 6px;
+}
+
+.menu-version-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #6b7280;
+}
+
+.menu-version-value {
+  color: #111827;
+  font-size: 13px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.menu-version-error {
+  color: #b91c1c;
+  font-size: 12px;
+}
+
+.header-menu .menu-version-refresh {
+  background: #e5e7eb;
+  color: #111827;
+  padding: 8px 10px;
+  border-radius: 10px;
+}
+
+.header-menu .menu-version-refresh:hover {
+  background: #d1d5db;
+}
+
 .recipe-toolbar-actions {
   display: flex;
   gap: 10px;
