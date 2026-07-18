@@ -90,6 +90,7 @@ export type Recipe = RecipePayload & {
   updated_at: string;
   version: number;
 };
+export type RecipeListSort = 'created_desc' | 'title_asc';
 export type RecipeExportFormat = 'yaml' | 'markdown' | 'zip';
 export type RecipeImportResponse = { imported: number; created: number; updated: number };
 export type RecipeImportPreviewResponse = {

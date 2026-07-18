@@ -4,6 +4,7 @@ import re
 import uuid
 import zipfile
 from datetime import datetime, timezone
+from enum import StrEnum
 from typing import Any
 
 import yaml
@@ -22,6 +23,11 @@ from app.services.image_service import DownloadedImage, ImageService
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
 
+class RecipeListSort(StrEnum):
+    CREATED_DESC = "created_desc"
+    TITLE_ASC = "title_asc"
+
+
 class RecipeService:
     def __init__(
         self,
@@ -38,13 +44,21 @@ class RecipeService:
         document = {key: value for key, value in document.items() if key != "_id"}
         return RecipeOut.model_validate(document)
 
-    async def list_recipes(self, group_ids: list[str] | None = None) -> list[RecipeOut]:
+    async def list_recipes(
+        self,
+        group_ids: list[str] | None = None,
+        sort: RecipeListSort = RecipeListSort.CREATED_DESC,
+    ) -> list[RecipeOut]:
+        sort_fields = {
+            RecipeListSort.CREATED_DESC: [("created_at", -1), ("title", 1)],
+            RecipeListSort.TITLE_ASC: [("title", 1), ("created_at", -1)],
+        }[sort]
         if group_ids is None:
-            documents = await self.repository.list(sort=[("updated_at", -1)], limit=100)
+            documents = await self.repository.list(sort=sort_fields, limit=100)
         else:
             documents = await self.repository.list_by_group(
                 group_ids=group_ids,
-                sort=[("updated_at", -1)],
+                sort=sort_fields,
             )
         return [self._to_output(document) for document in documents]
 

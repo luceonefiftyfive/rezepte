@@ -207,6 +207,52 @@ async def test_recipe_create_get_list_update_and_delete(client):
 
 
 @pytest.mark.anyio
+async def test_recipe_list_supports_title_and_creation_sorting(client):
+    admin_token = await _login_token(client)
+    headers = {"Authorization": f"Bearer {admin_token}"}
+
+    early_response = await client.post(
+        "/recipes",
+        json={
+            "title": "Zwiebelkuchen",
+            "group_ids": ["family"],
+            "yield": {"amount": "1", "unit": "Blech"},
+            "ingredient_sections": [],
+            "instructions": [],
+        },
+        headers=headers,
+    )
+    assert early_response.status_code == 201
+
+    later_response = await client.post(
+        "/recipes",
+        json={
+            "title": "Apfelmus",
+            "group_ids": ["family"],
+            "yield": {"amount": "2", "unit": "Gläser"},
+            "ingredient_sections": [],
+            "instructions": [],
+        },
+        headers=headers,
+    )
+    assert later_response.status_code == 201
+
+    created_sorted = await client.get("/recipes?sort=created_desc", headers=headers)
+    assert created_sorted.status_code == 200
+    assert [item["title"] for item in created_sorted.json()][:2] == [
+        "Apfelmus",
+        "Zwiebelkuchen",
+    ]
+
+    title_sorted = await client.get("/recipes?sort=title_asc", headers=headers)
+    assert title_sorted.status_code == 200
+    assert [item["title"] for item in title_sorted.json()][:2] == [
+        "Apfelmus",
+        "Zwiebelkuchen",
+    ]
+
+
+@pytest.mark.anyio
 async def test_recipe_validation(client):
     admin_token = await _login_token(client)
     headers = {"Authorization": f"Bearer {admin_token}"}
