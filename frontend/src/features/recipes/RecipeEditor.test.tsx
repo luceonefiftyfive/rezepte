@@ -3,11 +3,48 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { RecipeEditor } from './RecipeEditor';
 
+const AVAILABLE_GROUPS = [
+  {
+    id: 'recipes',
+    name: 'Rezepte',
+    description: null,
+    created_at: '2026-07-17T10:00:00Z',
+    updated_at: '2026-07-17T10:00:00Z',
+  },
+  {
+    id: 'family',
+    name: 'Familie',
+    description: null,
+    created_at: '2026-07-17T10:00:00Z',
+    updated_at: '2026-07-17T10:00:00Z',
+  },
+];
+
+const SINGLE_AVAILABLE_GROUP = [
+  {
+    id: 'recipes',
+    name: 'Rezepte',
+    description: null,
+    created_at: '2026-07-17T10:00:00Z',
+    updated_at: '2026-07-17T10:00:00Z',
+  },
+];
+
 describe('RecipeEditor', () => {
+  async function selectGroup(user: ReturnType<typeof userEvent.setup>, groupName: string) {
+    await user.click(
+      screen.getByRole('button', { name: /Rezeptbuecher auswählen|Rezeptbücher auswählen/i }),
+    );
+    await user.click(screen.getByLabelText(groupName));
+    await user.click(screen.getByRole('button', { name: 'Auswahl übernehmen' }));
+  }
+
   it('submits structured ingredients and instruction steps', async () => {
     const user = userEvent.setup();
     const onSave = vi.fn().mockResolvedValue(undefined);
-    render(<RecipeEditor onSave={onSave} />);
+    render(<RecipeEditor onSave={onSave} availableGroups={AVAILABLE_GROUPS} />);
+
+    await selectGroup(user, 'Rezepte');
 
     await user.type(screen.getByLabelText('Name'), 'Kartoffelsuppe');
     await user.clear(screen.getByLabelText('Menge'));
@@ -51,9 +88,50 @@ describe('RecipeEditor', () => {
     ]);
   });
 
+  it('auto-selects and shows the single available group', async () => {
+    const user = userEvent.setup();
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    render(<RecipeEditor onSave={onSave} availableGroups={SINGLE_AVAILABLE_GROUP} />);
+
+    expect(screen.getByText('Rezepte')).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', {
+        name: /Rezeptbuecher auswählen|Rezeptbücher auswählen/i,
+      }),
+    ).not.toBeInTheDocument();
+
+    await user.type(screen.getByLabelText('Name'), 'Nudeln');
+    await user.type(screen.getByLabelText('Zutat'), 'Pasta');
+    await user.type(screen.getByLabelText('Zubereitungsschritt 1'), 'Kochen.');
+    await user.click(screen.getByRole('button', { name: 'Rezept speichern' }));
+
+    expect(onSave).toHaveBeenCalledOnce();
+    const payload = onSave.mock.calls[0][0];
+    expect(payload.group_ids).toEqual(['recipes']);
+  });
+
+  it('requires at least one selected group in multi-select mode', async () => {
+    const user = userEvent.setup();
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    render(<RecipeEditor onSave={onSave} availableGroups={AVAILABLE_GROUPS} />);
+
+    await user.type(screen.getByLabelText('Name'), 'Nudeln');
+    await user.type(screen.getByLabelText('Zutat'), 'Pasta');
+    await user.type(screen.getByLabelText('Zubereitungsschritt 1'), 'Kochen.');
+    await user.click(screen.getByRole('button', { name: 'Rezept speichern' }));
+
+    expect(onSave).not.toHaveBeenCalled();
+    expect(screen.getByText('Bitte mindestens ein Rezeptbuch auswählen.')).toBeInTheDocument();
+  });
+
   it('supports custom units and removing rows', async () => {
     const user = userEvent.setup();
-    render(<RecipeEditor onSave={vi.fn().mockResolvedValue(undefined)} />);
+    render(
+      <RecipeEditor
+        onSave={vi.fn().mockResolvedValue(undefined)}
+        availableGroups={AVAILABLE_GROUPS}
+      />,
+    );
     await user.selectOptions(screen.getByLabelText('Einheit'), 'custom');
     expect(screen.getByLabelText('Eigene Einheit')).toBeInTheDocument();
     await user.click(screen.getByLabelText('Zutat löschen'));
@@ -63,7 +141,9 @@ describe('RecipeEditor', () => {
   it('imports ingredients and instructions from markdown lists', async () => {
     const user = userEvent.setup();
     const onSave = vi.fn().mockResolvedValue(undefined);
-    render(<RecipeEditor onSave={onSave} />);
+    render(<RecipeEditor onSave={onSave} availableGroups={AVAILABLE_GROUPS} />);
+
+    await selectGroup(user, 'Rezepte');
 
     await user.type(screen.getByLabelText('Name'), 'Salbei-Spaghetti');
     await user.click(screen.getByRole('button', { name: 'Markdown importieren' }));
@@ -108,7 +188,9 @@ describe('RecipeEditor', () => {
   it('parses compact quantities and german unit phrases from markdown imports', async () => {
     const user = userEvent.setup();
     const onSave = vi.fn().mockResolvedValue(undefined);
-    render(<RecipeEditor onSave={onSave} />);
+    render(<RecipeEditor onSave={onSave} availableGroups={AVAILABLE_GROUPS} />);
+
+    await selectGroup(user, 'Rezepte');
 
     await user.type(screen.getByLabelText('Name'), 'Kraeuterreis');
     await user.click(screen.getByRole('button', { name: 'Markdown importieren' }));

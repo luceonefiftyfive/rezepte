@@ -1,9 +1,8 @@
 from typing import Any, Optional
 
+from app.repositories.base_repository import MongoRepository
 from bson import ObjectId
 from motor.motor_asyncio import AsyncIOMotorDatabase
-
-from app.repositories.base_repository import MongoRepository
 
 UserDocument = dict[str, Any]
 
@@ -55,3 +54,10 @@ class UserRepository(MongoRepository[UserDocument]):
         self, email: str, user_object_id: ObjectId
     ) -> bool:
         return await self.exists({"email": email, "_id": {"$ne": user_object_id}})
+
+    async def remove_group_references(self, group_id: str) -> int:
+        result = await self.collection.update_many(
+            {},
+            {"$pull": {"groups": {"group_id": group_id}}},
+        )
+        return result.modified_count

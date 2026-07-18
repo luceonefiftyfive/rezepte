@@ -109,3 +109,11 @@ export type SignedImageUrlResponse = {
   view_url: string;
   expires_in: number;
 };
+
+export type Group = {
+  id: string;
+  name: string;
+  description: string | null;
+  created_at: string;
+  updated_at: string;
+};

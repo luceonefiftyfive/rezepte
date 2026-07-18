@@ -38,8 +38,14 @@ class RecipeService:
         document = {key: value for key, value in document.items() if key != "_id"}
         return RecipeOut.model_validate(document)
 
-    async def list_recipes(self) -> list[RecipeOut]:
-        documents = await self.repository.list(sort=[("updated_at", -1)], limit=100)
+    async def list_recipes(self, group_ids: list[str] | None = None) -> list[RecipeOut]:
+        if group_ids is None:
+            documents = await self.repository.list(sort=[("updated_at", -1)], limit=100)
+        else:
+            documents = await self.repository.list_by_group(
+                group_ids=group_ids,
+                sort=[("updated_at", -1)],
+            )
         return [self._to_output(document) for document in documents]
 
     async def get_recipe(self, recipe_id: str) -> RecipeOut | None:

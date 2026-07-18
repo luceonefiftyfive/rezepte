@@ -2,6 +2,7 @@ import { ChangeEvent, FormEvent, useEffect, useState } from 'react';
 import { API_BASE, apiFetch } from '../../api/client';
 import { useAuth } from '../../auth/AuthContext';
 import type {
+  Group,
   GroupRole,
   RecipeExportFormat,
   RecipeImportPreviewResponse,
@@ -35,10 +36,25 @@ const EMPTY_NEW_USER: NewUserForm = {
 
 type AdminView = 'users' | 'import-export';
 
+type GroupForm = {
+  id: string;
+  name: string;
+  description: string;
+};
+
+const EMPTY_GROUP: GroupForm = {
+  id: '',
+  name: '',
+  description: '',
+};
+
 export function AdminSection() {
   const { token, user: currentUser, refreshUser, isAdmin } = useAuth();
   const [users, setUsers] = useState<UserPublic[]>([]);
+  const [groups, setGroups] = useState<Group[]>([]);
   const [newUser, setNewUser] = useState<NewUserForm>(EMPTY_NEW_USER);
+  const [newGroup, setNewGroup] = useState<GroupForm>(EMPTY_GROUP);
+  const [groupFormDrafts, setGroupFormDrafts] = useState<Record<string, GroupForm>>({});
   const [activeView, setActiveView] = useState<AdminView>('users');
   const [groupDrafts, setGroupDrafts] = useState<Record<string, GroupRole[]>>({});
   const [recipeGroupFilter, setRecipeGroupFilter] = useState('');
@@ -61,8 +77,31 @@ export function AdminSection() {
     }
   }
 
+  async function loadGroups(): Promise<void> {
+    setError('');
+    try {
+      const data = await apiFetch<Group[]>('/groups', {}, token);
+      setGroups(data);
+      setGroupFormDrafts(
+        Object.fromEntries(
+          data.map((group) => [
+            group.id,
+            {
+              id: group.id,
+              name: group.name,
+              description: group.description ?? '',
+            },
+          ]),
+        ),
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unbekannter Fehler');
+    }
+  }
+
   useEffect(() => {
     void loadUsers();
+    void loadGroups();
   }, [token]);
 
   useEffect(() => {
@@ -100,6 +139,88 @@ export function AdminSection() {
       setStatus(`Benutzer ${newUser.username} wurde angelegt`);
       setNewUser(EMPTY_NEW_USER);
       await loadUsers();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unbekannter Fehler');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function createGroup(event: FormEvent<HTMLFormElement>): Promise<void> {
+    event.preventDefault();
+    setBusy(true);
+    setError('');
+    setStatus('');
+    try {
+      await apiFetch<Group>(
+        '/groups',
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            id: newGroup.id.trim(),
+            name: newGroup.name.trim(),
+            description: newGroup.description.trim() || null,
+          }),
+        },
+        token,
+      );
+      setStatus(`Rezeptbuch ${newGroup.name} wurde angelegt`);
+      setNewGroup(EMPTY_GROUP);
+      await loadGroups();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unbekannter Fehler');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveGroup(groupId: string): Promise<void> {
+    const draft = groupFormDrafts[groupId];
+    if (!draft) return;
+    setBusy(true);
+    setError('');
+    try {
+      await apiFetch<Group>(
+        `/groups/${groupId}`,
+        {
+          method: 'PUT',
+          body: JSON.stringify({
+            name: draft.name.trim(),
+            description: draft.description.trim() || null,
+          }),
+        },
+        token,
+      );
+      setStatus(`Rezeptbuch ${draft.name} wurde aktualisiert`);
+      await loadGroups();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unbekannter Fehler');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function deleteGroup(group: Group): Promise<void> {
+    if (
+      !window.confirm(
+        `Rezeptbuch „${group.name}“ löschen? Zugehörigkeiten werden aus Rezepten entfernt; Rezepte ohne verbleibende Bücher werden gelöscht.`,
+      )
+    ) {
+      return;
+    }
+    setBusy(true);
+    setError('');
+    try {
+      const result = await apiFetch<{
+        ok: boolean;
+        users_updated: number;
+        recipes_updated: number;
+        recipes_deleted: number;
+      }>(`/groups/${group.id}`, { method: 'DELETE' }, token);
+      setStatus(
+        `Rezeptbuch gelöscht. Nutzer aktualisiert: ${result.users_updated}, Rezepte aktualisiert: ${result.recipes_updated}, Rezepte gelöscht: ${result.recipes_deleted}.`,
+      );
+      await Promise.all([loadGroups(), loadUsers()]);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unbekannter Fehler');
     } finally {
@@ -410,6 +531,113 @@ export function AdminSection() {
 
       {activeView === 'users' && (
         <>
+          {currentUser?.is_super_admin && (
+            <section className="card" aria-labelledby="group-management-heading">
+              <div className="section-heading compact">
+                <h3 id="group-management-heading">Rezeptbücher verwalten</h3>
+                <button type="button" onClick={() => void loadGroups()} disabled={busy}>
+                  Rezeptbücher neu laden
+                </button>
+              </div>
+
+              <form onSubmit={createGroup} className="user-create-form">
+                <h4>Rezeptbuch anlegen</h4>
+                <div className="form-grid">
+                  <label>
+                    ID
+                    <input
+                      value={newGroup.id}
+                      onChange={(e) => setNewGroup({ ...newGroup, id: e.target.value })}
+                      required
+                    />
+                  </label>
+                  <label>
+                    Name
+                    <input
+                      value={newGroup.name}
+                      onChange={(e) => setNewGroup({ ...newGroup, name: e.target.value })}
+                      required
+                    />
+                  </label>
+                  <label>
+                    Beschreibung
+                    <input
+                      value={newGroup.description}
+                      onChange={(e) => setNewGroup({ ...newGroup, description: e.target.value })}
+                    />
+                  </label>
+                </div>
+                <button type="submit" disabled={busy}>
+                  Rezeptbuch anlegen
+                </button>
+              </form>
+
+              <div className="user-list">
+                {groups.map((group) => {
+                  const draft = groupFormDrafts[group.id] ?? {
+                    id: group.id,
+                    name: group.name,
+                    description: group.description ?? '',
+                  };
+                  return (
+                    <article className="card user-card" key={group.id}>
+                      <h4>{group.id}</h4>
+                      <div className="form-grid">
+                        <label>
+                          Name
+                          <input
+                            value={draft.name}
+                            onChange={(event) =>
+                              setGroupFormDrafts((current) => ({
+                                ...current,
+                                [group.id]: {
+                                  ...draft,
+                                  name: event.target.value,
+                                },
+                              }))
+                            }
+                          />
+                        </label>
+                        <label>
+                          Beschreibung
+                          <input
+                            value={draft.description}
+                            onChange={(event) =>
+                              setGroupFormDrafts((current) => ({
+                                ...current,
+                                [group.id]: {
+                                  ...draft,
+                                  description: event.target.value,
+                                },
+                              }))
+                            }
+                          />
+                        </label>
+                      </div>
+                      <div className="button-row">
+                        <button
+                          type="button"
+                          onClick={() => void saveGroup(group.id)}
+                          disabled={busy}
+                        >
+                          Speichern
+                        </button>
+                        <button
+                          type="button"
+                          className="button-danger"
+                          onClick={() => void deleteGroup(group)}
+                          disabled={busy}
+                        >
+                          Löschen
+                        </button>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            </section>
+          )}
+
           <section className="card" aria-labelledby="user-management-heading">
             <div className="section-heading">
               <h3 id="user-management-heading">Benutzerverwaltung</h3>

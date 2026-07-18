@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { apiFetch } from '../../api/client';
 import { useAuth } from '../../auth/AuthContext';
 import type {
+  Group,
   ImageUploadResponse,
   Recipe,
   RecipePayload,
@@ -63,8 +64,12 @@ export function RecipeSection({
   createRequestVersion = 0,
   overviewRequestVersion = 0,
 }: RecipeSectionProps) {
-  const { token } = useAuth();
+  const { token, mayEditRecipes } = useAuth();
+  const lastLoadedRecipeSelectionRef = useRef<string | null>(null);
   const [recipes, setRecipes] = useState<Recipe[]>([]);
+  const [availableGroups, setAvailableGroups] = useState<Group[]>([]);
+  const [manageableGroups, setManageableGroups] = useState<Group[]>([]);
+  const [selectedViewGroupIds, setSelectedViewGroupIds] = useState<string[]>([]);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [editing, setEditing] = useState<Recipe | null>(null);
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
@@ -82,6 +87,10 @@ export function RecipeSection({
     () => Array.from(new Set(recipes.flatMap((recipe) => recipe.tags))).sort(),
     [recipes],
   );
+  const editorGroups = useMemo(
+    () => (manageableGroups.length > 0 ? manageableGroups : availableGroups),
+    [manageableGroups, availableGroups],
+  );
 
   const visibleRecipes = useMemo(() => {
     const needle = searchQuery.trim().toLocaleLowerCase('de');
@@ -96,13 +105,78 @@ export function RecipeSection({
     });
   }, [recipes, searchQuery, selectedTag]);
 
-  async function loadRecipes() {
+  function getRecipeSelectionKey(groupIds: string[], groups: Group[]): string {
+    const queryKey = groups.length > 1 ? groupIds.slice().sort().join(',') : '__all__';
+    return `${token ?? 'anonymous'}:${queryKey}`;
+  }
+
+  async function loadRecipes(
+    groupIds = selectedViewGroupIds,
+    groups = availableGroups,
+    options: { force?: boolean } = {},
+  ) {
     setError('');
+
+    if (!token) {
+      lastLoadedRecipeSelectionRef.current = null;
+      setRecipes([]);
+      return;
+    }
+
+    if (groups.length > 0 && groupIds.length === 0) {
+      lastLoadedRecipeSelectionRef.current = null;
+      setRecipes([]);
+      return;
+    }
+
+    const selectionKey = getRecipeSelectionKey(groupIds, groups);
+    if (!options.force && lastLoadedRecipeSelectionRef.current === selectionKey) {
+      return;
+    }
+
     try {
-      setRecipes(await apiFetch<Recipe[]>('/recipes', {}, token));
+      const query =
+        groups.length > 1 && groupIds.length > 0
+          ? `?group_ids=${encodeURIComponent(groupIds.join(','))}`
+          : '';
+      setRecipes(await apiFetch<Recipe[]>(`/recipes${query}`, {}, token));
+      lastLoadedRecipeSelectionRef.current = selectionKey;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unbekannter Fehler');
     }
+  }
+
+  async function loadGroups() {
+    setError('');
+    try {
+      const [viewGroups, editGroups] = await Promise.all([
+        apiFetch<Group[]>('/groups', {}, token),
+        mayEditRecipes
+          ? apiFetch<Group[]>('/groups?manageable_only=true', {}, token)
+          : Promise.resolve([]),
+      ]);
+      const nextSelectedViewGroupIds = (() => {
+        const valid = selectedViewGroupIds.filter((id) =>
+          viewGroups.some((group) => group.id === id),
+        );
+        if (valid.length > 0) return valid;
+        return viewGroups.map((group) => group.id);
+      })();
+
+      setAvailableGroups(viewGroups);
+      setManageableGroups(editGroups);
+      setSelectedViewGroupIds(nextSelectedViewGroupIds);
+
+      await loadRecipes(nextSelectedViewGroupIds, viewGroups);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unbekannter Fehler');
+    }
+  }
+
+  function toggleSelectedViewGroup(groupId: string) {
+    setSelectedViewGroupIds((current) =>
+      current.includes(groupId) ? current.filter((id) => id !== groupId) : [...current, groupId],
+    );
   }
 
   async function saveRecipe(payload: RecipePayload, version?: number) {
@@ -235,8 +309,14 @@ export function RecipeSection({
   }
 
   useEffect(() => {
-    void loadRecipes();
-  }, [token]);
+    lastLoadedRecipeSelectionRef.current = null;
+    void loadGroups();
+  }, [token, mayEditRecipes]);
+
+  useEffect(() => {
+    if (availableGroups.length === 0) return;
+    void loadRecipes(selectedViewGroupIds, availableGroups);
+  }, [token, availableGroups, selectedViewGroupIds]);
 
   useEffect(() => {
     let active = true;
@@ -298,8 +378,9 @@ export function RecipeSection({
 
   useEffect(() => {
     if (createRequestVersion === 0) return;
+    if (!mayEditRecipes) return;
     openRecipeEditor();
-  }, [createRequestVersion]);
+  }, [createRequestVersion, mayEditRecipes]);
 
   useEffect(() => {
     if (overviewRequestVersion === 0) return;
@@ -316,11 +397,46 @@ export function RecipeSection({
           <h2 id="recipes-heading">Rezepte</h2>
         </div>
         <div>
-          <button type="button" onClick={() => void loadRecipes()} disabled={busy}>
+          <button
+            type="button"
+            onClick={() => void loadRecipes(selectedViewGroupIds, availableGroups, { force: true })}
+            disabled={busy}
+          >
             Neu laden
           </button>
         </div>
       </div>
+      {availableGroups.length > 1 && (
+        <div className="card">
+          <div className="section-heading compact">
+            <h3>Rezeptbücher anzeigen</h3>
+            <div className="button-row">
+              <button
+                type="button"
+                className="button-secondary button-small"
+                onClick={() => setSelectedViewGroupIds(availableGroups.map((group) => group.id))}
+              >
+                Alle
+              </button>
+            </div>
+          </div>
+          <div className="category-row">
+            {availableGroups.map((group) => (
+              <label key={group.id} className="checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={selectedViewGroupIds.includes(group.id)}
+                  onChange={() => toggleSelectedViewGroup(group.id)}
+                />
+                {group.name}
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
+      {availableGroups.length === 1 && (
+        <p className="muted">Aktives Rezeptbuch: {availableGroups[0].name}</p>
+      )}
       {status && (
         <div className="auth-status" role="status">
           {status}
@@ -420,6 +536,7 @@ export function RecipeSection({
                 <button
                   type="button"
                   className="button-secondary"
+                  disabled={!mayEditRecipes}
                   onClick={() => openRecipeEditor(selectedRecipe)}
                 >
                   Bearbeiten
@@ -427,7 +544,7 @@ export function RecipeSection({
                 <button
                   className="button-danger"
                   type="button"
-                  disabled={busy}
+                  disabled={busy || !mayEditRecipes}
                   onClick={() => void deleteRecipe(selectedRecipe)}
                 >
                   Löschen
@@ -506,6 +623,8 @@ export function RecipeSection({
       {isEditorOpen && (
         <RecipeEditor
           recipe={editing}
+          availableGroups={editorGroups}
+          forceSingleGroupId={editorGroups.length === 1 ? editorGroups[0].id : null}
           busy={busy}
           onSave={saveRecipe}
           onCancel={() => {

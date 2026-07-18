@@ -1,6 +1,6 @@
 import pytest
 from app.core.database import get_db
-from app.core.security import hash_password
+from app.core.security import hash_password, now_utc
 from app.main import app
 from httpx2 import ASGITransport, AsyncClient
 from mongomock_motor import AsyncMongoMockClient
@@ -17,6 +17,26 @@ async def db():
     test_db = client["test_rezepte"]
     await test_db.users.create_index("username", unique=True)
     await test_db.users.create_index("email", unique=True)
+    await test_db.groups.create_index("id", unique=True)
+    timestamp = now_utc()
+    await test_db.groups.insert_many(
+        [
+            {
+                "id": "recipes",
+                "name": "Rezepte",
+                "description": "Standardgruppe",
+                "created_at": timestamp,
+                "updated_at": timestamp,
+            },
+            {
+                "id": "family",
+                "name": "Familie",
+                "description": "Familienkochbuch",
+                "created_at": timestamp,
+                "updated_at": timestamp,
+            },
+        ]
+    )
     await test_db.users.insert_one(
         {
             "username": "admin",

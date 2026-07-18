@@ -10,6 +10,8 @@ type AuthContextValue = {
   isAuthenticated: boolean;
   isAdmin: boolean;
   mayManageUsers: boolean;
+  mayManageGroups: boolean;
+  mayEditRecipes: boolean;
   login: (username: string, password: string) => Promise<void>;
   logout: () => void;
   refreshUser: () => Promise<void>;
@@ -74,9 +76,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       token,
       user,
       isAuthenticated: Boolean(token && user),
-      isAdmin: Boolean(user?.is_super_admin || user?.groups.some((group) => group.role === 'admin')),
+      isAdmin: Boolean(
+        user?.is_super_admin || user?.groups.some((group) => group.role === 'admin'),
+      ),
       mayManageUsers: Boolean(
         user?.is_super_admin || user?.groups.some((group) => group.role === 'admin'),
+      ),
+      mayManageGroups: Boolean(user?.is_super_admin),
+      mayEditRecipes: Boolean(
+        user?.is_super_admin ||
+        user?.groups.some((group) => group.role === 'admin' || group.role === 'author'),
       ),
       login,
       logout,

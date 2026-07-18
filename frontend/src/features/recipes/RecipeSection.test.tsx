@@ -2,18 +2,56 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { RecipeSection } from './RecipeSection';
 
-vi.mock('../../auth/AuthContext', () => ({ useAuth: () => ({ token: 'test-token' }) }));
+vi.mock('../../auth/AuthContext', () => ({
+  useAuth: () => ({ token: 'test-token', mayEditRecipes: true }),
+}));
 vi.mock('../../api/client', () => ({ apiFetch: vi.fn() }));
 
 import { apiFetch } from '../../api/client';
 const mockedApiFetch = vi.mocked(apiFetch);
 
 describe('RecipeSection', () => {
+  function mockGroups() {
+    mockedApiFetch.mockResolvedValueOnce([
+      {
+        id: 'recipes',
+        name: 'Rezepte',
+        description: null,
+        created_at: '2026-07-17T10:00:00Z',
+        updated_at: '2026-07-17T10:00:00Z',
+      },
+      {
+        id: 'family',
+        name: 'Familie',
+        description: null,
+        created_at: '2026-07-17T10:00:00Z',
+        updated_at: '2026-07-17T10:00:00Z',
+      },
+    ]);
+    mockedApiFetch.mockResolvedValueOnce([
+      {
+        id: 'recipes',
+        name: 'Rezepte',
+        description: null,
+        created_at: '2026-07-17T10:00:00Z',
+        updated_at: '2026-07-17T10:00:00Z',
+      },
+      {
+        id: 'family',
+        name: 'Familie',
+        description: null,
+        created_at: '2026-07-17T10:00:00Z',
+        updated_at: '2026-07-17T10:00:00Z',
+      },
+    ]);
+  }
+
   beforeEach(() => {
     mockedApiFetch.mockReset();
   });
 
   it('renders recipes returned by the backend in the overview list', async () => {
+    mockGroups();
     mockedApiFetch.mockResolvedValueOnce([
       {
         id: 'recipe-1',
@@ -46,6 +84,7 @@ describe('RecipeSection', () => {
   });
 
   it('shows recipe details when the list item is viewed', async () => {
+    mockGroups();
     mockedApiFetch.mockResolvedValueOnce([
       {
         id: 'recipe-1',
@@ -86,6 +125,7 @@ describe('RecipeSection', () => {
   });
 
   it('renders recipe and step images when signed URLs are available', async () => {
+    mockGroups();
     mockedApiFetch
       .mockResolvedValueOnce([
         {
@@ -144,6 +184,7 @@ describe('RecipeSection', () => {
   });
 
   it('returns to overview when overview request version changes', async () => {
+    mockGroups();
     mockedApiFetch.mockResolvedValueOnce([
       {
         id: 'recipe-1',
@@ -162,9 +203,13 @@ describe('RecipeSection', () => {
       },
     ]);
 
-    const { rerender } = render(<RecipeSection createRequestVersion={1} overviewRequestVersion={0} />);
+    const { rerender } = render(
+      <RecipeSection createRequestVersion={1} overviewRequestVersion={0} />,
+    );
 
-    await waitFor(() => expect(screen.getByRole('heading', { name: 'Neues Rezept' })).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { name: 'Neues Rezept' })).toBeInTheDocument(),
+    );
 
     rerender(<RecipeSection createRequestVersion={1} overviewRequestVersion={1} />);
 
@@ -172,5 +217,65 @@ describe('RecipeSection', () => {
       expect(screen.queryByRole('heading', { name: 'Neues Rezept' })).not.toBeInTheDocument();
       expect(screen.getByRole('button', { name: /Rezept anzeigen Brot/i })).toBeInTheDocument();
     });
+  });
+
+  it('falls back to visible groups in editor when manageable groups are empty', async () => {
+    mockedApiFetch.mockResolvedValueOnce([
+      {
+        id: 'recipes',
+        name: 'Rezepte',
+        description: null,
+        created_at: '2026-07-17T10:00:00Z',
+        updated_at: '2026-07-17T10:00:00Z',
+      },
+      {
+        id: 'family',
+        name: 'Familie',
+        description: null,
+        created_at: '2026-07-17T10:00:00Z',
+        updated_at: '2026-07-17T10:00:00Z',
+      },
+    ]);
+    mockedApiFetch.mockResolvedValueOnce([]);
+    mockedApiFetch.mockResolvedValueOnce([]);
+
+    render(<RecipeSection createRequestVersion={1} />);
+
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { name: 'Neues Rezept' })).toBeInTheDocument(),
+    );
+
+    expect(
+      screen.getByRole('button', {
+        name: /Rezeptbuecher auswählen \(0\)|Rezeptbücher auswählen \(0\)/i,
+      }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Keine verfügbaren Rezeptbücher.')).not.toBeInTheDocument();
+  });
+
+  it('loads recipes even when no groups are returned', async () => {
+    mockedApiFetch.mockResolvedValueOnce([]);
+    mockedApiFetch.mockResolvedValueOnce([]);
+    mockedApiFetch.mockResolvedValueOnce([
+      {
+        id: 'recipe-1',
+        title: 'Brot',
+        description: 'Einfach',
+        group_ids: ['legacy-group'],
+        tags: ['Backen'],
+        time: { preparation_minutes: 10, cooking_minutes: 40, resting_minutes: 60 },
+        yield: { amount: '1', unit: 'Laib' },
+        ingredient_sections: [],
+        instructions: [],
+        remarks: null,
+        created_at: '2026-07-12T12:00:00Z',
+        updated_at: '2026-07-12T12:00:00Z',
+        version: 1,
+      },
+    ]);
+
+    render(<RecipeSection />);
+
+    await waitFor(() => expect(screen.getByText('Brot')).toBeInTheDocument());
   });
 });

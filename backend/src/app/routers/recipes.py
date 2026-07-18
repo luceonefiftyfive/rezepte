@@ -10,7 +10,8 @@ from app.models.recipes import (
     RecipeOut,
     RecipeUpdate,
 )
-from app.routers.users import require_admin_or_super_admin
+from app.models.user import Role
+from app.routers.users import get_current_user, require_admin_or_super_admin
 from app.services.image_service import ImageService
 from app.services.recipe_service import RecipeService
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
@@ -19,6 +20,27 @@ from motor.motor_asyncio import AsyncIOMotorDatabase
 
 router = APIRouter(prefix="/recipes", tags=["recipes"])
 settings = Settings()
+
+
+def _assigned_group_ids(current_user: dict) -> set[str]:
+    return {group["group_id"] for group in current_user.get("groups", [])}
+
+
+def _manageable_group_ids(current_user: dict) -> set[str] | None:
+    if current_user.get("is_super_admin", False):
+        return None
+    return {
+        group["group_id"]
+        for group in current_user.get("groups", [])
+        if group["role"] in {Role.admin.value, Role.author.value}
+    }
+
+
+def _parse_group_ids(value: str | None) -> set[str] | None:
+    if value is None:
+        return None
+    parsed = {item.strip() for item in value.split(",") if item.strip()}
+    return parsed
 
 
 def _recipe_image_url(request: Request, key: str) -> str:
@@ -78,8 +100,28 @@ async def _read_recipe_import_payload(
 @router.get("", response_model=list[RecipeOut])
 async def list_recipes(
     db: Annotated[AsyncIOMotorDatabase, Depends(get_db)],
+    current_user: Annotated[dict, Depends(get_current_user)],
+    group_ids: str | None = None,
 ) -> list[RecipeOut]:
-    return await RecipeService(db).list_recipes()
+    selected_group_ids = _parse_group_ids(group_ids)
+    if current_user.get("is_super_admin", False):
+        return await RecipeService(db).list_recipes(
+            group_ids=sorted(selected_group_ids) if selected_group_ids else None
+        )
+
+    assigned_group_ids = _assigned_group_ids(current_user)
+    if not assigned_group_ids:
+        return []
+    if selected_group_ids is not None and not selected_group_ids.issubset(
+        assigned_group_ids
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail="You may only filter recipes by groups assigned to you",
+        )
+
+    effective_group_ids = selected_group_ids or assigned_group_ids
+    return await RecipeService(db).list_recipes(group_ids=sorted(effective_group_ids))
 
 
 @router.get("/admin/export", response_model=None)
@@ -161,10 +203,14 @@ async def import_recipes(
 async def get_recipe(
     recipe_id: str,
     db: Annotated[AsyncIOMotorDatabase, Depends(get_db)],
+    current_user: Annotated[dict, Depends(get_current_user)],
 ) -> RecipeOut:
     recipe = await RecipeService(db).get_recipe(recipe_id)
     if recipe is None:
         raise HTTPException(status_code=404, detail="Recipe not found")
+    if not current_user.get("is_super_admin", False):
+        if not set(recipe.group_ids).intersection(_assigned_group_ids(current_user)):
+            raise HTTPException(status_code=404, detail="Recipe not found")
     return recipe
 
 
@@ -172,7 +218,23 @@ async def get_recipe(
 async def create_recipe(
     recipe: RecipeCreate,
     db: Annotated[AsyncIOMotorDatabase, Depends(get_db)],
+    current_user: Annotated[dict, Depends(get_current_user)],
 ) -> RecipeOut:
+    if not recipe.group_ids:
+        raise HTTPException(
+            status_code=422, detail="A recipe must be assigned to at least one group"
+        )
+
+    manageable_group_ids = _manageable_group_ids(current_user)
+    requested_group_ids = set(recipe.group_ids)
+    if manageable_group_ids is not None:
+        if not manageable_group_ids:
+            raise HTTPException(status_code=403, detail="Author role required")
+        if not requested_group_ids.issubset(manageable_group_ids):
+            raise HTTPException(
+                status_code=403,
+                detail="You may only create recipes in groups where you are author or admin",
+            )
     return await RecipeService(db).create_recipe(recipe)
 
 
@@ -181,11 +243,41 @@ async def update_recipe(
     recipe_id: str,
     recipe: RecipeUpdate,
     db: Annotated[AsyncIOMotorDatabase, Depends(get_db)],
+    current_user: Annotated[dict, Depends(get_current_user)],
 ) -> RecipeOut:
     service = RecipeService(db)
     existing = await service.get_recipe(recipe_id)
     if existing is None:
         raise HTTPException(status_code=404, detail="Recipe not found")
+
+    manageable_group_ids = _manageable_group_ids(current_user)
+    if manageable_group_ids is not None:
+        if not manageable_group_ids:
+            raise HTTPException(status_code=403, detail="Author role required")
+        if not set(existing.group_ids).intersection(manageable_group_ids):
+            raise HTTPException(status_code=403, detail="You may not edit this recipe")
+
+        requested_group_ids = (
+            set(recipe.group_ids)
+            if recipe.group_ids is not None
+            else set(existing.group_ids)
+        )
+        if not requested_group_ids:
+            raise HTTPException(
+                status_code=422,
+                detail="A recipe must be assigned to at least one group",
+            )
+        if not requested_group_ids.issubset(manageable_group_ids):
+            raise HTTPException(
+                status_code=403,
+                detail="You may only assign groups where you are author or admin",
+            )
+    elif recipe.group_ids is not None and not recipe.group_ids:
+        raise HTTPException(
+            status_code=422,
+            detail="A recipe must be assigned to at least one group",
+        )
+
     updated = await service.update_recipe(recipe_id, recipe)
     if updated is None:
         raise HTTPException(
@@ -199,8 +291,23 @@ async def update_recipe(
 async def delete_recipe(
     recipe_id: str,
     db: Annotated[AsyncIOMotorDatabase, Depends(get_db)],
+    current_user: Annotated[dict, Depends(get_current_user)],
 ) -> dict[str, object]:
-    if not await RecipeService(db).delete_recipe(recipe_id):
+    service = RecipeService(db)
+    existing = await service.get_recipe(recipe_id)
+    if existing is None:
+        raise HTTPException(status_code=404, detail="Recipe not found")
+
+    manageable_group_ids = _manageable_group_ids(current_user)
+    if manageable_group_ids is not None:
+        if not manageable_group_ids:
+            raise HTTPException(status_code=403, detail="Author role required")
+        if not set(existing.group_ids).intersection(manageable_group_ids):
+            raise HTTPException(
+                status_code=403, detail="You may not delete this recipe"
+            )
+
+    if not await service.delete_recipe(recipe_id):
         raise HTTPException(status_code=404, detail="Recipe not found")
     return {"ok": True, "deleted_id": recipe_id}
 
@@ -210,11 +317,19 @@ async def upload_recipe_image(
     recipe_id: str,
     request: Request,
     db: Annotated[AsyncIOMotorDatabase, Depends(get_db)],
+    current_user: Annotated[dict, Depends(get_current_user)],
     file: UploadFile = File(...),
 ) -> dict[str, object]:
     recipe = await RecipeService(db).get_recipe(recipe_id)
     if recipe is None:
         raise HTTPException(status_code=404, detail="Recipe not found")
+
+    manageable_group_ids = _manageable_group_ids(current_user)
+    if manageable_group_ids is not None:
+        if not manageable_group_ids:
+            raise HTTPException(status_code=403, detail="Author role required")
+        if not set(recipe.group_ids).intersection(manageable_group_ids):
+            raise HTTPException(status_code=403, detail="You may not edit this recipe")
 
     image_service = ImageService(request.app.state.s3_client, settings)
     uploaded = await image_service.upload_image(
@@ -237,11 +352,19 @@ async def upload_instruction_image(
     step_id: str,
     request: Request,
     db: Annotated[AsyncIOMotorDatabase, Depends(get_db)],
+    current_user: Annotated[dict, Depends(get_current_user)],
     file: UploadFile = File(...),
 ) -> dict[str, object]:
     recipe = await RecipeService(db).get_recipe(recipe_id)
     if recipe is None:
         raise HTTPException(status_code=404, detail="Recipe not found")
+
+    manageable_group_ids = _manageable_group_ids(current_user)
+    if manageable_group_ids is not None:
+        if not manageable_group_ids:
+            raise HTTPException(status_code=403, detail="Author role required")
+        if not set(recipe.group_ids).intersection(manageable_group_ids):
+            raise HTTPException(status_code=403, detail="You may not edit this recipe")
     if not any(step.id == step_id for step in recipe.instructions):
         raise HTTPException(status_code=404, detail="Instruction step not found")
 
@@ -276,10 +399,14 @@ async def get_recipe_image_url(
     recipe_id: str,
     request: Request,
     db: Annotated[AsyncIOMotorDatabase, Depends(get_db)],
+    current_user: Annotated[dict, Depends(get_current_user)],
 ) -> dict[str, object]:
     recipe = await RecipeService(db).get_recipe(recipe_id)
     if recipe is None:
         raise HTTPException(status_code=404, detail="Recipe not found")
+    if not current_user.get("is_super_admin", False):
+        if not set(recipe.group_ids).intersection(_assigned_group_ids(current_user)):
+            raise HTTPException(status_code=404, detail="Recipe not found")
     if not recipe.recipe_image_key:
         raise HTTPException(status_code=404, detail="Recipe image not found")
 
@@ -297,10 +424,14 @@ async def get_instruction_image_url(
     step_id: str,
     request: Request,
     db: Annotated[AsyncIOMotorDatabase, Depends(get_db)],
+    current_user: Annotated[dict, Depends(get_current_user)],
 ) -> dict[str, object]:
     recipe = await RecipeService(db).get_recipe(recipe_id)
     if recipe is None:
         raise HTTPException(status_code=404, detail="Recipe not found")
+    if not current_user.get("is_super_admin", False):
+        if not set(recipe.group_ids).intersection(_assigned_group_ids(current_user)):
+            raise HTTPException(status_code=404, detail="Recipe not found")
 
     step = next((item for item in recipe.instructions if item.id == step_id), None)
     if step is None:
