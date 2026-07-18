@@ -91,7 +91,7 @@ export type Recipe = RecipePayload & {
   version: number;
 };
 export type RecipeListSort = 'created_desc' | 'title_asc';
-export type RecipeExportFormat = 'yaml' | 'markdown' | 'zip';
+export type RecipeExportFormat = 'zip';
 export type RecipeImportResponse = { imported: number; created: number; updated: number };
 export type RecipeImportPreviewResponse = {
   imported: number;

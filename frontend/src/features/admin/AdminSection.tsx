@@ -58,7 +58,7 @@ export function AdminSection() {
   const [activeView, setActiveView] = useState<AdminView>('users');
   const [groupDrafts, setGroupDrafts] = useState<Record<string, GroupRole[]>>({});
   const [recipeGroupFilter, setRecipeGroupFilter] = useState('');
-  const [recipeImportFormat, setRecipeImportFormat] = useState<RecipeExportFormat>('yaml');
+  const [recipeImportFormat] = useState<RecipeExportFormat>('zip');
   const [recipeImportFile, setRecipeImportFile] = useState<File | null>(null);
   const [recipeImportPreview, setRecipeImportPreview] =
     useState<RecipeImportPreviewResponse | null>(null);
@@ -329,8 +329,6 @@ export function AdminSection() {
 
   function getRecipeImportFormat(fileName: string): RecipeExportFormat | null {
     const extension = fileName.split('.').pop()?.toLowerCase();
-    if (extension === 'yaml' || extension === 'yml') return 'yaml';
-    if (extension === 'md' || extension === 'markdown') return 'markdown';
     if (extension === 'zip') return 'zip';
     return null;
   }
@@ -348,32 +346,22 @@ export function AdminSection() {
     const format = getRecipeImportFormat(file.name);
     if (!format) {
       setRecipeImportFile(null);
-      setError('Bitte eine YAML-, Markdown- oder ZIP-Datei auswählen.');
+      setError('Bitte eine ZIP-Datei auswählen.');
       event.target.value = '';
       return;
     }
 
     setError('');
-    setRecipeImportFormat(format);
     setRecipeImportFile(file);
   }
 
-  async function getRecipeImportPayload(): Promise<{ content?: string; archive?: File } | null> {
+  async function getRecipeImportPayload(): Promise<{ archive: File } | null> {
     if (!recipeImportFile) {
       setError('Bitte eine Import-Datei auswählen.');
       return null;
     }
 
-    if (recipeImportFormat === 'zip') {
-      return { archive: recipeImportFile };
-    }
-
-    const content = (await recipeImportFile.text()).trim();
-    if (!content) {
-      setError('Die ausgewählte Import-Datei ist leer.');
-      return null;
-    }
-    return { content };
+    return { archive: recipeImportFile };
   }
 
   async function postRecipeImport<T>(path: string): Promise<T> {
@@ -382,41 +370,27 @@ export function AdminSection() {
       throw new Error('Import payload unavailable');
     }
 
-    if (recipeImportFormat === 'zip') {
-      const formData = new FormData();
-      formData.append('format', recipeImportFormat);
-      formData.append('archive', payload.archive as File);
-      return apiFetch<T>(path, { method: 'POST', body: formData }, token);
-    }
-
-    return apiFetch<T>(
-      path,
-      {
-        method: 'POST',
-        body: JSON.stringify({ format: recipeImportFormat, content: payload.content }),
-      },
-      token,
-    );
+    const formData = new FormData();
+    formData.append('format', recipeImportFormat);
+    formData.append('archive', payload.archive);
+    return apiFetch<T>(path, { method: 'POST', body: formData }, token);
   }
 
-  async function exportRecipes(exportFormat: RecipeExportFormat): Promise<void> {
+  async function exportRecipes(): Promise<void> {
     setBusy(true);
     setError('');
     setStatus('');
     try {
       const query = buildRecipeAdminQuery();
-      const response = await fetch(
-        `${API_BASE}/recipes/admin/export?format=${exportFormat}${query ? `&${query.slice(1)}` : ''}`,
-        { headers: token ? { Authorization: `Bearer ${token}` } : undefined },
-      );
+      const response = await fetch(`${API_BASE}/recipes/admin/export${query}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      });
       if (!response.ok) {
         throw new Error(await response.text());
       }
       const now = new Date();
       const datePart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-      const extension =
-        exportFormat === 'yaml' ? 'yaml' : exportFormat === 'markdown' ? 'md' : 'zip';
-      const fileName = `rezepte-export-${datePart}.${extension}`;
+      const fileName = `rezepte-export-${datePart}.zip`;
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement('a');
@@ -426,7 +400,7 @@ export function AdminSection() {
       anchor.click();
       anchor.remove();
       URL.revokeObjectURL(url);
-      setStatus(`Export (${exportFormat.toUpperCase()}) wurde heruntergeladen.`);
+      setStatus('Export (ZIP) wurde heruntergeladen.');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unbekannter Fehler');
     } finally {
@@ -831,37 +805,13 @@ export function AdminSection() {
                 placeholder="z.B. family"
               />
             </label>
-            <label>
-              Import-Format
-              <select
-                value={recipeImportFormat}
-                onChange={(event) =>
-                  setRecipeImportFormat(event.target.value as RecipeExportFormat)
-                }
-              >
-                <option value="yaml">YAML</option>
-                <option value="markdown">Markdown</option>
-                <option value="zip">ZIP</option>
-              </select>
-            </label>
           </div>
           <div className="button-row">
-            <button type="button" disabled={busy} onClick={() => void exportRecipes('yaml')}>
-              Export YAML
-            </button>
             <button
               type="button"
               className="button-secondary"
               disabled={busy}
-              onClick={() => void exportRecipes('markdown')}
-            >
-              Export Markdown
-            </button>
-            <button
-              type="button"
-              className="button-secondary"
-              disabled={busy}
-              onClick={() => void exportRecipes('zip')}
+              onClick={() => void exportRecipes()}
             >
               Export ZIP
             </button>
@@ -876,11 +826,7 @@ export function AdminSection() {
           </div>
           <label>
             Import-Datei
-            <input
-              type="file"
-              accept=".yaml,.yml,.md,.markdown,.zip,application/x-yaml,text/yaml,text/markdown,application/zip"
-              onChange={selectRecipeImportFile}
-            />
+            <input type="file" accept=".zip,application/zip" onChange={selectRecipeImportFile} />
           </label>
           {recipeImportFile && <p className="muted">Ausgewählt: {recipeImportFile.name}</p>}
           <div className="button-row">

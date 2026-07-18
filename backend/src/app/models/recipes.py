@@ -127,14 +127,7 @@ class RecipeOut(RecipeBase):
 
 
 class RecipeExportFormat(StrEnum):
-    YAML = "yaml"
-    MARKDOWN = "markdown"
     ZIP = "zip"
-
-
-class RecipeImportRequest(BaseModel):
-    format: RecipeExportFormat = RecipeExportFormat.YAML
-    content: str = Field(min_length=1)
 
 
 class RecipeImportResult(BaseModel):
