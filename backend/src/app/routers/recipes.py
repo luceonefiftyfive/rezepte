@@ -15,7 +15,7 @@ from app.routers.users import get_current_user, require_admin_or_super_admin
 from app.services.image_service import ImageService
 from app.services.recipe_service import RecipeListSort, RecipeService
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
-from fastapi.responses import PlainTextResponse, Response
+from fastapi.responses import Response
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
 router = APIRouter(prefix="/recipes", tags=["recipes"])
@@ -51,50 +51,26 @@ def _recipe_image_url(request: Request, key: str) -> str:
 
 async def _read_recipe_import_payload(
     request: Request,
-) -> tuple[RecipeExportFormat, str | None, bytes | None]:
+) -> bytes:
     content_type = request.headers.get("content-type", "")
-    if content_type.startswith("multipart/form-data"):
-        form = await request.form()
-        raw_format = form.get("format")
-        if not isinstance(raw_format, str) or not raw_format:
-            raise HTTPException(status_code=400, detail="Import format is required")
-        try:
-            import_format = RecipeExportFormat(raw_format)
-        except ValueError as exc:
-            raise HTTPException(
-                status_code=400, detail="Invalid import format"
-            ) from exc
+    if not content_type.startswith("multipart/form-data"):
+        raise HTTPException(
+            status_code=400,
+            detail="Please upload a ZIP archive using multipart/form-data",
+        )
 
-        content = form.get("content")
-        archive = form.get("archive")
-        archive_content = None
-        if archive is not None:
-            if not hasattr(archive, "read"):
-                raise HTTPException(status_code=400, detail="Invalid archive upload")
-            archive_content = await archive.read()
+    form = await request.form()
+    raw_format = form.get("format")
+    if raw_format not in {None, RecipeExportFormat.ZIP.value}:
+        raise HTTPException(status_code=400, detail="Only ZIP format is supported")
 
-        if import_format == RecipeExportFormat.ZIP:
-            if archive_content is None:
-                raise HTTPException(
-                    status_code=400, detail="Please select a ZIP archive"
-                )
-            return import_format, None, archive_content
-
-        if not isinstance(content, str):
-            raise HTTPException(status_code=400, detail="Import content is required")
-        return import_format, content, None
-
-    payload = await request.json()
-    raw_format = payload.get("format", RecipeExportFormat.YAML)
-    try:
-        import_format = RecipeExportFormat(raw_format)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail="Invalid import format") from exc
-
-    content = payload.get("content")
-    if not isinstance(content, str):
-        raise HTTPException(status_code=400, detail="Import content is required")
-    return import_format, content, None
+    archive = form.get("archive")
+    if archive is None or not hasattr(archive, "read"):
+        raise HTTPException(status_code=400, detail="Please select a ZIP archive")
+    archive_content = await archive.read()
+    if not archive_content:
+        raise HTTPException(status_code=400, detail="Uploaded ZIP archive is empty")
+    return archive_content
 
 
 @router.get("", response_model=list[RecipeOut])
@@ -134,22 +110,15 @@ async def export_recipes(
     db: Annotated[AsyncIOMotorDatabase, Depends(get_db)],
     request: Request,
     _: Annotated[dict, Depends(require_admin_or_super_admin)],
-    format: RecipeExportFormat = RecipeExportFormat.YAML,
     group_id: str | None = None,
-) -> str | Response:
+) -> Response:
     service = RecipeService(db, request.app.state.s3_client, settings)
-    exported = await service.export_recipes(export_format=format, group_id=group_id)
-    if format == RecipeExportFormat.ZIP:
-        assert isinstance(exported, bytes)
-        return Response(
-            content=exported,
-            media_type="application/zip",
-            headers={
-                "Content-Disposition": 'attachment; filename="rezepte-export.zip"'
-            },
-        )
-    assert isinstance(exported, str)
-    return PlainTextResponse(exported)
+    exported = await service.export_recipes(group_id=group_id)
+    return Response(
+        content=exported,
+        media_type="application/zip",
+        headers={"Content-Disposition": 'attachment; filename="rezepte-export.zip"'},
+    )
 
 
 @router.delete("/admin/purge")
@@ -169,16 +138,10 @@ async def preview_import_recipes(
     _: Annotated[dict, Depends(require_admin_or_super_admin)],
 ) -> RecipeImportPreviewResult:
     try:
-        import_format, content, archive_content = await _read_recipe_import_payload(
-            request
-        )
+        archive_content = await _read_recipe_import_payload(request)
         return await RecipeService(
             db, request.app.state.s3_client, settings
-        ).preview_import_recipes(
-            content=content,
-            import_format=import_format,
-            archive_content=archive_content,
-        )
+        ).preview_import_recipes(archive_content=archive_content)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -190,16 +153,10 @@ async def import_recipes(
     _: Annotated[dict, Depends(require_admin_or_super_admin)],
 ) -> RecipeImportResult:
     try:
-        import_format, content, archive_content = await _read_recipe_import_payload(
-            request
-        )
+        archive_content = await _read_recipe_import_payload(request)
         return await RecipeService(
             db, request.app.state.s3_client, settings
-        ).import_recipes(
-            content=content,
-            import_format=import_format,
-            archive_content=archive_content,
-        )
+        ).import_recipes(archive_content=archive_content)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 

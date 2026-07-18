@@ -362,16 +362,21 @@ async def test_recipe_admin_export_import_and_purge(client):
     created = await client.post("/recipes", json=payload, headers=headers)
     assert created.status_code == 201
 
-    yaml_export = await client.get(
-        "/recipes/admin/export?format=yaml&group_id=family",
+    zip_export = await client.get(
+        "/recipes/admin/export?group_id=family",
         headers=headers,
     )
-    assert yaml_export.status_code == 200
-    assert "recipes:" in yaml_export.text
-    assert "Kartoffelsuppe" in yaml_export.text
-    assert "images:" in yaml_export.text
-    assert cover_key in yaml_export.text
-    assert step_key in yaml_export.text
+    assert zip_export.status_code == 200
+    assert zip_export.headers["content-type"].startswith("application/zip")
+    with zipfile.ZipFile(io.BytesIO(zip_export.content)) as archive:
+        manifest = archive.read("manifest.yaml").decode("utf-8")
+        assert "recipes:" in manifest
+        assert "Kartoffelsuppe" in manifest
+        assert "images:" in manifest
+        assert cover_key in manifest
+        assert step_key in manifest
+        assert archive.read(f"images/{cover_key}") == b"cover-bytes"
+        assert archive.read(f"images/{step_key}") == b"step-bytes"
 
     app.state.s3_client.objects.clear()
 
@@ -381,42 +386,6 @@ async def test_recipe_admin_export_import_and_purge(client):
     )
     assert purge_group.status_code == 200
     assert purge_group.json()["deleted_count"] == 1
-
-    preview_yaml = await client.post(
-        "/recipes/admin/import/preview",
-        headers=headers,
-        json={"format": "yaml", "content": yaml_export.text},
-    )
-    assert preview_yaml.status_code == 200
-    assert preview_yaml.json() == {
-        "imported": 1,
-        "would_create": 1,
-        "would_update": 0,
-    }
-
-    import_yaml = await client.post(
-        "/recipes/admin/import",
-        headers=headers,
-        json={"format": "yaml", "content": yaml_export.text},
-    )
-    assert import_yaml.status_code == 200
-    assert import_yaml.json()["imported"] == 1
-    assert cover_key in app.state.s3_client.objects
-    assert step_key in app.state.s3_client.objects
-
-    zip_export = await client.get(
-        "/recipes/admin/export?format=zip&group_id=family",
-        headers=headers,
-    )
-    assert zip_export.status_code == 200
-    assert zip_export.headers["content-type"].startswith("application/zip")
-    with zipfile.ZipFile(io.BytesIO(zip_export.content)) as archive:
-        manifest = archive.read("manifest.yaml").decode("utf-8")
-        assert "recipes:" in manifest
-        assert archive.read(f"images/{cover_key}") == b"cover-bytes"
-        assert archive.read(f"images/{step_key}") == b"step-bytes"
-
-    app.state.s3_client.objects.clear()
 
     preview_zip = await client.post(
         "/recipes/admin/import/preview",
@@ -429,8 +398,8 @@ async def test_recipe_admin_export_import_and_purge(client):
     assert preview_zip.status_code == 200
     assert preview_zip.json() == {
         "imported": 1,
-        "would_create": 0,
-        "would_update": 1,
+        "would_create": 1,
+        "would_update": 0,
     }
 
     import_zip = await client.post(
@@ -446,36 +415,50 @@ async def test_recipe_admin_export_import_and_purge(client):
     assert cover_key in app.state.s3_client.objects
     assert step_key in app.state.s3_client.objects
 
-    markdown_export = await client.get(
-        "/recipes/admin/export?format=markdown",
+    app.state.s3_client.objects.clear()
+
+    preview_zip_update = await client.post(
+        "/recipes/admin/import/preview",
         headers=headers,
+        files={
+            "format": (None, "zip"),
+            "archive": ("rezepte-export.zip", zip_export.content, "application/zip"),
+        },
     )
-    assert markdown_export.status_code == 200
-    assert markdown_export.text.startswith("# Rezepte Export")
+    assert preview_zip_update.status_code == 200
+    assert preview_zip_update.json() == {
+        "imported": 1,
+        "would_create": 0,
+        "would_update": 1,
+    }
+
+    import_zip_update = await client.post(
+        "/recipes/admin/import",
+        headers=headers,
+        files={
+            "format": (None, "zip"),
+            "archive": ("rezepte-export.zip", zip_export.content, "application/zip"),
+        },
+    )
+    assert import_zip_update.status_code == 200
+    assert import_zip_update.json()["imported"] == 1
+    assert cover_key in app.state.s3_client.objects
+    assert step_key in app.state.s3_client.objects
 
     purge_all = await client.delete("/recipes/admin/purge", headers=headers)
     assert purge_all.status_code == 200
     assert purge_all.json()["deleted_count"] == 1
 
-    preview_markdown = await client.post(
-        "/recipes/admin/import/preview",
-        headers=headers,
-        json={"format": "markdown", "content": markdown_export.text},
-    )
-    assert preview_markdown.status_code == 200
-    assert preview_markdown.json() == {
-        "imported": 1,
-        "would_create": 1,
-        "would_update": 0,
-    }
-
-    import_markdown = await client.post(
+    import_zip_after_purge = await client.post(
         "/recipes/admin/import",
         headers=headers,
-        json={"format": "markdown", "content": markdown_export.text},
+        files={
+            "format": (None, "zip"),
+            "archive": ("rezepte-export.zip", zip_export.content, "application/zip"),
+        },
     )
-    assert import_markdown.status_code == 200
-    assert import_markdown.json()["imported"] == 1
+    assert import_zip_after_purge.status_code == 200
+    assert import_zip_after_purge.json()["imported"] == 1
 
     listed = await client.get("/recipes", headers=headers)
     assert listed.status_code == 200
@@ -514,14 +497,14 @@ async def test_non_admin_cannot_use_recipe_admin_tools(client):
     import_response = await client.post(
         "/recipes/admin/import",
         headers=reader_headers,
-        json={"format": "yaml", "content": "recipes: []"},
+        files={"format": (None, "zip")},
     )
     assert import_response.status_code == 403
 
     preview_response = await client.post(
         "/recipes/admin/import/preview",
         headers=reader_headers,
-        json={"format": "yaml", "content": "recipes: []"},
+        files={"format": (None, "zip")},
     )
     assert preview_response.status_code == 403
 

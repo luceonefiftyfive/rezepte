@@ -1,6 +1,5 @@
 import base64
 import io
-import re
 import uuid
 import zipfile
 from datetime import datetime, timezone
@@ -10,7 +9,6 @@ from typing import Any
 import yaml
 from app.models.recipes import (
     RecipeCreate,
-    RecipeExportFormat,
     RecipeExportImage,
     RecipeExportPayload,
     RecipeImportPreviewResult,
@@ -117,33 +115,9 @@ class RecipeService:
 
     async def export_recipes(
         self,
-        export_format: RecipeExportFormat,
         group_id: str | None = None,
-    ) -> str | bytes:
-        if export_format == RecipeExportFormat.ZIP:
-            return await self._build_export_archive(group_id=group_id)
-
-        include_image_data = export_format != RecipeExportFormat.ZIP
-        payload = await self.build_export_payload(
-            group_id=group_id,
-            include_image_data=include_image_data,
-        )
-        payload_yaml = self._dump_export_payload_yaml(payload)
-
-        if export_format == RecipeExportFormat.YAML:
-            return payload_yaml
-
-        filter_group = group_id or "alle"
-        return (
-            "# Rezepte Export\n\n"
-            f"- Schema: `{payload.export_schema}`\n"
-            f"- Exportiert am: `{payload.exported_at.isoformat()}`\n"
-            f"- Anzahl Rezepte: `{payload.count}`\n"
-            f"- Filter Gruppe: `{filter_group}`\n\n"
-            "```yaml\n"
-            f"{payload_yaml}"
-            "```\n"
-        )
+    ) -> bytes:
+        return await self._build_export_archive(group_id=group_id)
 
     async def purge_recipes(self, group_id: str | None = None) -> int:
         if group_id:
@@ -152,18 +126,11 @@ class RecipeService:
 
     async def import_recipes(
         self,
-        content: str | None,
-        import_format: RecipeExportFormat,
-        archive_content: bytes | None = None,
+        archive_content: bytes,
     ) -> RecipeImportResult:
-        parsed_payload = self._parse_import_payload(
-            content=content,
-            import_format=import_format,
-            archive_content=archive_content,
-        )
+        parsed_payload = self._parse_import_payload(archive_content=archive_content)
         await self._restore_import_images(
             parsed_payload,
-            import_format=import_format,
             archive_content=archive_content,
         )
         documents = self._collect_import_documents(parsed_payload)
@@ -185,15 +152,9 @@ class RecipeService:
 
     async def preview_import_recipes(
         self,
-        content: str | None,
-        import_format: RecipeExportFormat,
-        archive_content: bytes | None = None,
+        archive_content: bytes,
     ) -> RecipeImportPreviewResult:
-        parsed_payload = self._parse_import_payload(
-            content=content,
-            import_format=import_format,
-            archive_content=archive_content,
-        )
+        parsed_payload = self._parse_import_payload(archive_content=archive_content)
         documents = self._collect_import_documents(parsed_payload)
         simulated_existing_ids: set[str] = set()
         would_create = 0
@@ -219,45 +180,16 @@ class RecipeService:
             would_update=would_update,
         )
 
-    @staticmethod
-    def _extract_yaml_from_markdown(content: str) -> str:
-        code_fence_match = re.search(
-            r"```(?:yaml|yml|json)?\s*\n(.*?)```",
-            content,
-            flags=re.DOTALL | re.IGNORECASE,
-        )
-        return code_fence_match.group(1).strip() if code_fence_match else content
-
     def _parse_import_payload(
         self,
-        content: str | None,
-        import_format: RecipeExportFormat,
-        archive_content: bytes | None = None,
+        archive_content: bytes,
     ) -> dict[str, Any]:
-        if import_format == RecipeExportFormat.ZIP:
-            if archive_content is None:
-                raise ValueError("ZIP import requires archive content")
-            with zipfile.ZipFile(io.BytesIO(archive_content)) as archive:
-                try:
-                    yaml_content = archive.read("manifest.yaml").decode("utf-8")
-                except KeyError as exc:
-                    raise ValueError("ZIP archive must contain manifest.yaml") from exc
-                parsed = yaml.safe_load(yaml_content)
-                if not isinstance(parsed, dict):
-                    raise ValueError(
-                        "Import content must describe an object at top level"
-                    )
-                return parsed
-
-        if content is None:
-            raise ValueError("Import content is required")
-
-        yaml_content = (
-            self._extract_yaml_from_markdown(content)
-            if import_format == RecipeExportFormat.MARKDOWN
-            else content
-        )
-        parsed = yaml.safe_load(yaml_content)
+        with zipfile.ZipFile(io.BytesIO(archive_content)) as archive:
+            try:
+                yaml_content = archive.read("manifest.yaml").decode("utf-8")
+            except KeyError as exc:
+                raise ValueError("ZIP archive must contain manifest.yaml") from exc
+            parsed = yaml.safe_load(yaml_content)
         if not isinstance(parsed, dict):
             raise ValueError("Import content must describe an object at top level")
         return parsed
@@ -364,8 +296,7 @@ class RecipeService:
     async def _restore_import_images(
         self,
         parsed_payload: dict[str, Any],
-        import_format: RecipeExportFormat,
-        archive_content: bytes | None = None,
+        archive_content: bytes,
     ) -> None:
         raw_images = parsed_payload.get("images", {})
         if raw_images is None:
@@ -376,11 +307,7 @@ class RecipeService:
             return
 
         image_service = self._require_image_service()
-        archive = None
-        if import_format == RecipeExportFormat.ZIP:
-            if archive_content is None:
-                raise ValueError("ZIP import requires archive content")
-            archive = zipfile.ZipFile(io.BytesIO(archive_content))
+        archive = zipfile.ZipFile(io.BytesIO(archive_content))
 
         try:
             for key, raw_image in raw_images.items():
@@ -404,10 +331,6 @@ class RecipeService:
                             f"Exported image {key} is not valid base64 data"
                         ) from exc
                 else:
-                    if archive is None:
-                        raise ValueError(
-                            f"Exported image {key} does not contain inline data"
-                        )
                     image_path = (
                         path if isinstance(path, str) and path else f"images/{key}"
                     )
@@ -422,8 +345,7 @@ class RecipeService:
                     key=key, content=content, content_type=content_type
                 )
         finally:
-            if archive is not None:
-                archive.close()
+            archive.close()
 
     def _normalize_import_recipe(self, raw_recipe: dict[str, Any]) -> dict[str, Any]:
         if "id" in raw_recipe:
