@@ -28,6 +28,11 @@ export type SystemChecksResponse = {
   ok: boolean;
 };
 
+export type SystemVersionResponse = {
+  version: string;
+  git_hash: string;
+};
+
 export type Unit =
   | 'g'
   | 'kg'

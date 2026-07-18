@@ -22,6 +22,8 @@ services:
     build:
       context: ..
       dockerfile: docker/backend.Dockerfile
+      args:
+        REZEPTE_GIT_HASH: ${REZEPTE_GIT_HASH:-unknown}
     restart: unless-stopped
     environment:
       MONGODB_URL: ${MONGODB_URL:-mongodb://mongodb:27017}

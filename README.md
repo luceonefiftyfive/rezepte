@@ -28,3 +28,14 @@ Common Docker and deployment commands are documented here:
 Set up automatic formatting for the whole repository to ensure a consistent code style across all file types.
 
 See: [Formatting in VS Code](./docs/formatting.md)
+
+### System version
+
+The system version is configured centrally in `version.yaml` at repository root:
+
+```yaml
+version: 0.1.0
+```
+
+The backend exposes this value together with the current git hash via `/api/system/version`.
+In the frontend, the same information is available in the header hamburger menu under "Version".

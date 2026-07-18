@@ -1,5 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { apiFetch } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
+import type { SystemVersionResponse } from '../types';
 import recipesImage from '../../img/recipes.png';
 
 type Section = 'general' | 'recipes' | 'admin';
@@ -23,6 +25,26 @@ export function AppHeader({
 }: AppHeaderProps) {
   const { user, logout, mayManageUsers, isAuthenticated, mayEditRecipes } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [systemVersion, setSystemVersion] = useState<SystemVersionResponse | null>(null);
+  const [versionLoading, setVersionLoading] = useState(false);
+  const [versionError, setVersionError] = useState(false);
+
+  async function loadSystemVersion(): Promise<void> {
+    setVersionLoading(true);
+    setVersionError(false);
+    try {
+      const data = await apiFetch<SystemVersionResponse>('/system/version');
+      setSystemVersion(data);
+    } catch {
+      setVersionError(true);
+    } finally {
+      setVersionLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    void loadSystemVersion();
+  }, []);
 
   function selectSection(section: Section) {
     onSelectSection(section);
@@ -108,6 +130,26 @@ export function AppHeader({
                     Admin
                   </button>
                 )}
+                <div className="menu-version-box" role="presentation">
+                  <div className="menu-version-label">Version</div>
+                  <div className="menu-version-value">
+                    {versionLoading
+                      ? 'Lade ...'
+                      : systemVersion
+                        ? `${systemVersion.version} (${systemVersion.git_hash})`
+                        : 'Unbekannt'}
+                  </div>
+                  {versionError && (
+                    <div className="menu-version-error">Konnte nicht geladen werden.</div>
+                  )}
+                  <button
+                    type="button"
+                    className="menu-version-refresh"
+                    onClick={() => void loadSystemVersion()}
+                  >
+                    Aktualisieren
+                  </button>
+                </div>
               </div>
             )}
           </div>
