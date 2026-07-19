@@ -177,6 +177,81 @@ describe('RecipeSection', () => {
     );
   });
 
+  it('refreshes recipe overview after saving an edited recipe', async () => {
+    mockGroups();
+    mockedApiFetch
+      .mockResolvedValueOnce([
+        {
+          id: 'recipe-1',
+          title: 'Brot',
+          description: 'Einfach',
+          group_ids: ['family'],
+          tags: ['Backen'],
+          time: { preparation_minutes: 10, cooking_minutes: 40, resting_minutes: 60 },
+          yield: { amount: '1', unit: 'Laib' },
+          ingredient_sections: [],
+          instructions: [],
+          remarks: null,
+          created_at: '2026-07-12T12:00:00Z',
+          updated_at: '2026-07-12T12:00:00Z',
+          version: 1,
+        },
+      ])
+      .mockResolvedValueOnce({
+        id: 'recipe-1',
+        title: 'Brot verbessert',
+        description: 'Einfach',
+        group_ids: ['family'],
+        tags: ['Backen'],
+        time: { preparation_minutes: 10, cooking_minutes: 40, resting_minutes: 60 },
+        yield: { amount: '1', unit: 'Laib' },
+        ingredient_sections: [],
+        instructions: [],
+        remarks: null,
+        created_at: '2026-07-12T12:00:00Z',
+        updated_at: '2026-07-13T12:00:00Z',
+        version: 2,
+      })
+      .mockResolvedValueOnce([
+        {
+          id: 'recipe-1',
+          title: 'Brot verbessert',
+          description: 'Einfach',
+          group_ids: ['family'],
+          tags: ['Backen'],
+          time: { preparation_minutes: 10, cooking_minutes: 40, resting_minutes: 60 },
+          yield: { amount: '1', unit: 'Laib' },
+          ingredient_sections: [],
+          instructions: [],
+          remarks: null,
+          created_at: '2026-07-12T12:00:00Z',
+          updated_at: '2026-07-13T12:00:00Z',
+          version: 2,
+        },
+      ]);
+
+    render(<RecipeSection />);
+    await waitFor(() => expect(screen.getByText('Brot')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole('button', { name: /Rezept anzeigen Brot/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Bearbeiten' }));
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Brot verbessert' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Änderungen speichern' }));
+
+    await waitFor(() => expect(screen.getByText('Brot verbessert')).toBeInTheDocument());
+
+    expect(mockedApiFetch).toHaveBeenCalledWith(
+      '/recipes/recipe-1',
+      expect.objectContaining({ method: 'PUT' }),
+      'test-token',
+    );
+    expect(mockedApiFetch).toHaveBeenCalledWith(
+      '/recipes?sort=created_desc&group_ids=recipes%2Cfamily',
+      {},
+      'test-token',
+    );
+  });
+
   it('renders recipe and step images when signed URLs are available', async () => {
     mockGroups();
     mockedApiFetch

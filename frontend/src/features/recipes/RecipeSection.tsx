@@ -211,7 +211,7 @@ export function RecipeSection({
       setEditing(null);
       setIsEditorOpen(false);
       setSelectedRecipe(null);
-      await loadRecipes();
+      await loadRecipes(selectedViewGroupIds, availableGroups, recipeSort, { force: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unbekannter Fehler');
     } finally {
@@ -227,7 +227,7 @@ export function RecipeSection({
       if (editing?.id === recipe.id) setEditing(null);
       if (selectedRecipe?.id === recipe.id) setSelectedRecipe(null);
       if (editing?.id === recipe.id) setIsEditorOpen(false);
-      await loadRecipes();
+      await loadRecipes(selectedViewGroupIds, availableGroups, recipeSort, { force: true });
       setStatus('Rezept wurde gelöscht.');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unbekannter Fehler');
