@@ -139,6 +139,32 @@ async def test_delete_user_soft_delete(client):
 
 
 @pytest.mark.anyio
+async def test_recreate_user_after_soft_delete(client):
+    token = await login(client)
+    user = await create_normal_user(client, token)
+
+    delete_response = await client.delete(
+        f"/users/{user['id']}", headers=auth_header(token)
+    )
+    assert delete_response.status_code == 200
+
+    recreate_response = await client.post(
+        "/users",
+        headers=auth_header(token),
+        json={
+            "username": "jdoe",
+            "password": "very-secret",
+            "first_name": "John",
+            "last_name": "Doe",
+            "email": "john@example.com",
+            "groups": [{"group_id": "recipes", "role": "reader"}],
+            "is_super_admin": False,
+        },
+    )
+    assert recreate_response.status_code == 201, recreate_response.text
+
+
+@pytest.mark.anyio
 async def test_check_username_and_email(client):
     response = await client.get("/users/check-username/admin")
     assert response.status_code == 200

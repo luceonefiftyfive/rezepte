@@ -185,7 +185,8 @@ async def check_username(
     repository = UserRepository(db)
     return {
         "username": username,
-        "available": await repository.find_by_username(username) is None,
+        "available": await repository.find_by_username(username, active_only=True)
+        is None,
     }
 
 
@@ -194,4 +195,7 @@ async def check_email(
     email: str, db: ty.Annotated[AsyncIOMotorDatabase, Depends(get_db)]
 ):
     repository = UserRepository(db)
-    return {"email": email, "available": await repository.find_by_email(email) is None}
+    return {
+        "email": email,
+        "available": await repository.find_by_email(email, active_only=True) is None,
+    }
