@@ -14,14 +14,41 @@ class UserRepository(MongoRepository[UserDocument]):
         super().__init__(db)
 
     async def ensure_indexes(self) -> None:
-        await self.collection.create_index("username", unique=True)
-        await self.collection.create_index("email", unique=True)
+        index_info = await self.collection.index_information()
 
-    async def find_by_username(self, username: str) -> Optional[UserDocument]:
-        return await self.find_one({"username": username})
+        # Migrate legacy global unique indexes so soft-deleted users do not block reuse.
+        for legacy_name in ("username_1", "email_1"):
+            if legacy_name in index_info:
+                await self.collection.drop_index(legacy_name)
 
-    async def find_by_email(self, email: str) -> Optional[UserDocument]:
-        return await self.find_one({"email": email})
+        await self.collection.create_index(
+            "username",
+            unique=True,
+            partialFilterExpression={"is_active": True},
+            name="uniq_active_username",
+        )
+        await self.collection.create_index(
+            "email",
+            unique=True,
+            partialFilterExpression={"is_active": True},
+            name="uniq_active_email",
+        )
+
+    async def find_by_username(
+        self, username: str, *, active_only: bool = False
+    ) -> Optional[UserDocument]:
+        query: dict[str, Any] = {"username": username}
+        if active_only:
+            query["is_active"] = True
+        return await self.find_one(query)
+
+    async def find_by_email(
+        self, email: str, *, active_only: bool = False
+    ) -> Optional[UserDocument]:
+        query: dict[str, Any] = {"email": email}
+        if active_only:
+            query["is_active"] = True
+        return await self.find_one(query)
 
     async def find_active_super_admin(self) -> Optional[UserDocument]:
         return await self.find_one({"is_super_admin": True, "is_active": True})
@@ -53,7 +80,13 @@ class UserRepository(MongoRepository[UserDocument]):
     async def email_exists_for_other_user(
         self, email: str, user_object_id: ObjectId
     ) -> bool:
-        return await self.exists({"email": email, "_id": {"$ne": user_object_id}})
+        return await self.exists(
+            {
+                "email": email,
+                "_id": {"$ne": user_object_id},
+                "is_active": True,
+            }
+        )
 
     async def remove_group_references(self, group_id: str) -> int:
         result = await self.collection.update_many(

@@ -61,8 +61,8 @@ class UserService:
 
     async def authenticate_user(self, username: str, password: str) -> dict | None:
         log.info("Authenticating user '%s'", username)
-        user = await self.repository.find_by_username(username)
-        if not user or not user.get("is_active", True):
+        user = await self.repository.find_by_username(username, active_only=True)
+        if not user:
             log.info(
                 "Authentication failed for user '%s': user not found or inactive",
                 username,
@@ -75,9 +75,9 @@ class UserService:
         return user
 
     async def ensure_username_and_email_unique(self, username: str, email: str) -> None:
-        if await self.repository.find_by_username(username):
+        if await self.repository.find_by_username(username, active_only=True):
             raise HTTPException(status_code=409, detail="Username already exists")
-        if await self.repository.find_by_email(email):
+        if await self.repository.find_by_email(email, active_only=True):
             raise HTTPException(status_code=409, detail="Email already exists")
 
     def assert_may_manage_groups(
@@ -168,6 +168,16 @@ class UserService:
                     status_code=400,
                     detail="At least one active super-admin must remain",
                 )
+
+        target_id = str(target["_id"])
         await self.repository.update_by_object_id(
-            target["_id"], {"is_active": False, "updated_at": now_utc()}
+            target["_id"],
+            {
+                "is_active": False,
+                "deleted_username": target.get("username"),
+                "deleted_email": target.get("email"),
+                "username": f"deleted-{target_id}-username",
+                "email": f"deleted-{target_id}@deleted.local",
+                "updated_at": now_utc(),
+            },
         )
