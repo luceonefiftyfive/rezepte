@@ -1,5 +1,7 @@
 # Change log
 
+## fix<frontend>: set url' as link v0.3.1
+
 ## feat: add source information to recipes v0.3.0
 
 - add field source to recipes

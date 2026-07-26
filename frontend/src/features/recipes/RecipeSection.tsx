@@ -33,6 +33,37 @@ function getIngredientUnitLabel(unit: Unit, customUnit?: string | null): string 
   return unitLabels[unit] ?? unit;
 }
 
+function TextWithLinks({ text }: { text?: string }) {
+  if (!text) {
+    return null;
+  }
+
+  const urlRegex = /(https?:\/\/[^\s<>"']+)/gi;
+
+  return (
+    <>
+      {text.split(urlRegex).map((part, index) => {
+        if (!/^https?:\/\//i.test(part)) {
+          return <span key={index}>{part}</span>;
+        }
+
+        const match = part.match(/^(.*?)([.,;:!?)]*)$/);
+        const url = match?.[1] ?? part;
+        const trailingCharacters = match?.[2] ?? '';
+
+        return (
+          <span key={index}>
+            <a href={url} target="_blank" rel="noopener noreferrer">
+              {url}
+            </a>
+            {trailingCharacters}
+          </span>
+        );
+      })}
+    </>
+  );
+}
+
 function formatIngredient(recipe: Recipe): string {
   return recipe.ingredient_sections
     .flatMap((section) => section.ingredients)
@@ -580,7 +611,7 @@ export function RecipeSection({
               {selectedRecipe.description && <p>{selectedRecipe.description}</p>}
               {selectedRecipe.source && (
                 <p>
-                  <strong>Quelle:</strong> {selectedRecipe.source}
+                  <strong>Quelle:</strong> <TextWithLinks text={selectedRecipe.source} />
                 </p>
               )}
               {recipeImageUrl && (
