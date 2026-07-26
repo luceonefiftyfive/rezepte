@@ -75,6 +75,7 @@ export type RecipeYield = { amount: string; unit: string };
 export type RecipePayload = {
   title: string;
   description: string | null;
+  source: string | null;
   recipe_image_key?: string | null;
   group_ids: string[];
   tags: string[];

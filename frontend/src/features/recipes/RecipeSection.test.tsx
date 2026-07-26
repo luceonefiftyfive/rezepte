@@ -90,6 +90,7 @@ describe('RecipeSection', () => {
         id: 'recipe-1',
         title: 'Brot',
         description: 'Einfach',
+        source: 'https://example.com/brot',
         group_ids: ['family'],
         tags: ['Backen'],
         time: { preparation_minutes: 10, cooking_minutes: 40, resting_minutes: 60 },
@@ -119,6 +120,7 @@ describe('RecipeSection', () => {
     const detailSection = screen.getByRole('heading', { name: 'Rezept ansehen' }).closest('.card');
     expect(detailSection).toBeInTheDocument();
     expect(detailSection).toHaveTextContent('Einfach');
+    expect(detailSection).toHaveTextContent('https://example.com/brot');
     expect(detailSection).toHaveTextContent('Mehl');
     expect(detailSection).toHaveTextContent('Teig kneten.');
     expect(detailSection).toHaveTextContent('Frisch servieren.');

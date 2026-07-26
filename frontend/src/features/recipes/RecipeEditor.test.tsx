@@ -47,6 +47,7 @@ describe('RecipeEditor', () => {
     await selectGroup(user, 'Rezepte');
 
     await user.type(screen.getByLabelText('Name'), 'Kartoffelsuppe');
+    await user.type(screen.getByLabelText('Quelle'), '  Omas Kochbuch  ');
     await user.clear(screen.getByLabelText('Menge'));
     await user.type(screen.getByLabelText('Menge'), '6');
     await user.type(screen.getByLabelText('Abschnitt 1'), 'Für die Suppe');
@@ -69,6 +70,7 @@ describe('RecipeEditor', () => {
     expect(onSave).toHaveBeenCalledOnce();
     const payload = onSave.mock.calls[0][0];
     expect(payload.title).toBe('Kartoffelsuppe');
+    expect(payload.source).toBe('Omas Kochbuch');
     expect(payload.yield).toEqual({ amount: '6', unit: 'Portionen' });
     expect(payload.ingredient_sections[0].name).toBe('Für die Suppe');
     expect(payload.ingredient_sections[0].ingredients).toHaveLength(2);

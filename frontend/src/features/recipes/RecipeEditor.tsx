@@ -203,6 +203,7 @@ function emptyPayload(): RecipePayload {
   return {
     title: '',
     description: null,
+    source: null,
     recipe_image_key: null,
     group_ids: [],
     tags: [],
@@ -420,6 +421,7 @@ export function RecipeEditor({
       ...form,
       title: form.title.trim(),
       description: form.description?.trim() || null,
+      source: form.source?.trim() || null,
       remarks: form.remarks?.trim() || null,
       tags: tags
         .split(',')
@@ -610,6 +612,16 @@ export function RecipeEditor({
           rows={3}
           value={form.description ?? ''}
           onChange={(e) => setForm({ ...form, description: e.target.value })}
+        />
+      </label>
+      <label>
+        Quelle
+        <input
+          aria-label="Quelle"
+          placeholder="z. B. Kochbuchtitel oder URL"
+          value={form.source ?? ''}
+          maxLength={500}
+          onChange={(e) => setForm({ ...form, source: e.target.value })}
         />
       </label>
       <div className="editor-block">
