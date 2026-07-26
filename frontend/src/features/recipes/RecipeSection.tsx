@@ -578,6 +578,11 @@ export function RecipeSection({
                 </button>
               </div>
               {selectedRecipe.description && <p>{selectedRecipe.description}</p>}
+              {selectedRecipe.source && (
+                <p>
+                  <strong>Quelle:</strong> {selectedRecipe.source}
+                </p>
+              )}
               {recipeImageUrl && (
                 <img
                   className="recipe-detail-image"

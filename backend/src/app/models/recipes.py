@@ -43,7 +43,7 @@ class RecipeIngredient(BaseModel):
     scaling: ScalingMode = ScalingMode.LINEAR
 
     @model_validator(mode="after")
-    def validate_custom_unit(self) -> "RecipeIngredient":
+    def validate_custom_unit(self) -> RecipeIngredient:
         if self.unit == Unit.CUSTOM and not self.custom_unit:
             raise ValueError("custom_unit is required when unit is 'custom'")
         if self.unit != Unit.CUSTOM and self.custom_unit:
@@ -77,6 +77,7 @@ class RecipeYield(BaseModel):
 class RecipeBase(BaseModel):
     title: str = Field(min_length=1, max_length=200)
     description: str | None = Field(default=None, max_length=5000)
+    source: str | None = Field(default=None, max_length=500)
     recipe_image_key: str | None = Field(default=None, max_length=500)
     group_ids: list[str] = Field(default_factory=list)
     tags: list[str] = Field(default_factory=list)
@@ -89,7 +90,7 @@ class RecipeBase(BaseModel):
     model_config = {"populate_by_name": True}
 
     @model_validator(mode="after")
-    def validate_unique_ids(self) -> "RecipeBase":
+    def validate_unique_ids(self) -> RecipeBase:
         section_ids = [section.id for section in self.ingredient_sections]
         if len(section_ids) != len(set(section_ids)):
             raise ValueError("Ingredient section IDs must be unique")
@@ -106,6 +107,7 @@ class RecipeCreate(RecipeBase):
 class RecipeUpdate(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=200)
     description: str | None = Field(default=None, max_length=5000)
+    source: str | None = Field(default=None, max_length=500)
     recipe_image_key: str | None = Field(default=None, max_length=500)
     group_ids: list[str] | None = None
     tags: list[str] | None = None
