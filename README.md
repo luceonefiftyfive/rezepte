@@ -39,3 +39,5 @@ version: 0.1.0
 
 The backend exposes this value together with the current git hash via `/api/system/version`.
 In the frontend, the same information is available in the header hamburger menu under "Version".
+
+See document [Creating a Release](docs/creation-release.md) for more details.
