@@ -1,6 +1,7 @@
 import { ChangeEvent, FormEvent, useEffect, useState } from 'react';
 import { API_BASE, apiFetch } from '../../api/client';
 import { useAuth } from '../../auth/AuthContext';
+import { SectionUserInfo } from '../../components/SectionUserInfo';
 import type {
   Group,
   GroupRole,
@@ -477,27 +478,30 @@ export function AdminSection() {
           <p className="eyebrow">Geschützter Bereich</p>
           <h2 id="admin-heading">Administration</h2>
         </div>
-        <div className="admin-subnav" role="tablist" aria-label="Admin-Bereiche">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activeView === 'users'}
-            className={activeView === 'users' ? 'active' : ''}
-            onClick={() => setActiveView('users')}
-          >
-            Benutzerverwaltung
-          </button>
-          {isAdmin && (
+        <div className="section-heading-actions">
+          <SectionUserInfo />
+          <div className="admin-subnav" role="tablist" aria-label="Admin-Bereiche">
             <button
               type="button"
               role="tab"
-              aria-selected={activeView === 'import-export'}
-              className={activeView === 'import-export' ? 'active' : ''}
-              onClick={() => setActiveView('import-export')}
+              aria-selected={activeView === 'users'}
+              className={activeView === 'users' ? 'active' : ''}
+              onClick={() => setActiveView('users')}
             >
-              Import/Export
+              Benutzerverwaltung
             </button>
-          )}
+            {isAdmin && (
+              <button
+                type="button"
+                role="tab"
+                aria-selected={activeView === 'import-export'}
+                className={activeView === 'import-export' ? 'active' : ''}
+                onClick={() => setActiveView('import-export')}
+              >
+                Import/Export
+              </button>
+            )}
+          </div>
         </div>
       </div>
       {status && <div className="auth-status">{status}</div>}

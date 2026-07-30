@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { apiFetch } from '../../api/client';
 import { useAuth } from '../../auth/AuthContext';
+import { SectionUserInfo } from '../../components/SectionUserInfo';
 import type {
   Group,
   ImageUploadResponse,
@@ -436,7 +437,8 @@ export function RecipeSection({
           <p className="eyebrow">Geschützter Bereich</p>
           <h2 id="recipes-heading">Rezepte</h2>
         </div>
-        <div>
+        <div className="section-heading-actions">
+          <SectionUserInfo />
           <button
             type="button"
             onClick={() =>

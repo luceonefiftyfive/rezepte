@@ -15,17 +15,29 @@
 
 body {
   margin: 0;
+  height: 100vh;
+  overflow: hidden;
+  background: #f3f4f6;
+}
+
+#root {
+  height: 100vh;
 }
 
 .page {
   width: min(1100px, calc(100% - 32px));
+  max-height: 100vh;
   margin: 0 auto;
-  padding: 32px 0;
+  padding: 24px 0 32px;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .hero {
+  position: sticky;
+  top: 0;
+  z-index: 20;
   display: flex;
-  justify-content: space-between;
   gap: 24px;
   align-items: flex-start;
   padding: 32px;
@@ -36,8 +48,8 @@ body {
 }
 
 .hero-main {
-  display: grid;
-  gap: 14px;
+  display: flex;
+  flex: 1;
   min-width: 0;
 }
 
@@ -45,6 +57,11 @@ body {
   display: flex;
   align-items: center;
   gap: 14px;
+  min-width: 0;
+  margin-left: auto;
+  flex-shrink: 0;
+  max-width: 50%;
+  overflow: hidden;
 }
 
 .hero-overview-link {
@@ -78,13 +95,23 @@ body {
 
 .header-toolbar {
   display: flex;
-  gap: 10px;
   align-items: center;
-  flex-wrap: wrap;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+  flex-wrap: nowrap;
+}
+
+.header-left-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
 }
 
 .header-menu-wrapper {
   position: relative;
+  flex-shrink: 0;
 }
 
 .hamburger-button {
@@ -179,15 +206,78 @@ body {
   flex-wrap: wrap;
 }
 
-.recipe-toolbar-actions input {
-  width: min(380px, calc(100vw - 180px));
+.section-user {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 0;
+  margin-left: auto;
+  flex-shrink: 0;
+  font-size: 13px;
+  min-width: 240px;
 }
 
-.recipe-create-button {
+.section-user > div {
+  text-align: right;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.section-user strong {
+  display: block;
+  font-size: 13px;
+}
+
+.section-user .muted {
+  font-size: 11px;
+}
+
+.section-user .auth-token {
+  padding: 4px 8px;
+  font-size: 10px;
+}
+
+.section-user .button-secondary {
+  padding: 6px 12px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.recipe-create-button,
+.search-toggle {
   min-width: 44px;
-  padding: 10px 0;
-  font-size: 22px;
+  padding: 10px 12px;
+  font-size: 16px;
   line-height: 1;
+  background: #ffffff;
+  color: #111827;
+  border: 1px solid #d1d5db;
+  box-shadow: none;
+  font-weight: 700;
+}
+
+.search-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #ffffff;
+  color: #111827;
+}
+
+.search-toggle:hover,
+.recipe-create-button:hover {
+  background: #f3f4f6;
+  color: #111827;
+  border-color: #9ca3af;
+}
+
+.header-search-input {
+  width: min(320px, calc(100vw - 320px));
+  flex: 0 1 280px;
+  min-width: 180px;
+  max-width: 320px;
+  margin-left: 4px;
 }
 
 .eyebrow {
@@ -240,6 +330,13 @@ button {
   color: white;
   cursor: pointer;
   font-weight: 600;
+}
+
+button.search-toggle,
+button.recipe-create-button {
+  background: #ffffff;
+  color: #111827;
+  border: 1px solid #d1d5db;
 }
 
 button:hover {
@@ -323,6 +420,11 @@ a {
 @media (max-width: 800px) {
   .hero {
     flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .hero-main {
+    width: 100%;
   }
 
   .hero-heading {
@@ -339,11 +441,43 @@ a {
     align-items: stretch;
   }
 
+  .header-search-input {
+    width: 100%;
+  }
+
   .recipe-toolbar-actions {
     width: 100%;
   }
 
-  .recipe-toolbar-actions input {
+  .section-heading {
+    align-items: flex-start;
+  }
+
+  .section-heading-actions {
+    width: 100%;
+    margin-left: 0;
+    justify-content: space-between;
+    gap: 10px;
+  }
+
+  .section-user {
+    width: 100%;
+    min-width: 0;
+    margin-left: 0;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .section-user > div {
+    text-align: left;
+    white-space: normal;
+  }
+
+  .section-user .button-secondary {
+    margin-left: auto;
+  }
+
+  .admin-subnav {
     width: 100%;
   }
 
@@ -440,7 +574,7 @@ a {
 }
 
 .section-heading,
-.header-user,
+.section-user,
 .user-card__header,
 .user-card__actions,
 .admin-toolbar {
@@ -450,6 +584,19 @@ a {
   gap: 16px;
   flex-wrap: wrap;
   margin-bottom: 16px;
+}
+
+.section-user {
+  flex-shrink: 0;
+  margin-bottom: 0;
+}
+
+.section-heading-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-left: auto;
 }
 
 .admin-subnav {

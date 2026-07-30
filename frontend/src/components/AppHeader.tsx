@@ -23,7 +23,7 @@ export function AppHeader({
   onRecipeSearchChange,
   onRequestCreateRecipe,
 }: AppHeaderProps) {
-  const { user, logout, mayManageUsers, isAuthenticated, mayEditRecipes } = useAuth();
+  const { mayManageUsers, isAuthenticated, mayEditRecipes } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
   const [systemVersion, setSystemVersion] = useState<SystemVersionResponse | null>(null);
   const [versionLoading, setVersionLoading] = useState(false);
@@ -52,147 +52,155 @@ export function AppHeader({
   }
 
   const showRecipeActions = isAuthenticated && activeSection === 'recipes';
+  const [searchOpen, setSearchOpen] = useState(false);
 
   return (
     <header className="hero">
       <div className="hero-main">
-        <div className="hero-heading">
-          <button
-            type="button"
-            className="hero-overview-link"
-            onClick={onGoToRecipeOverview}
-            aria-label="Zur Rezeptübersicht"
-          >
-            <img
-              src={recipesImage}
-              alt="Rezeptsammlung"
-              className="hero-recipes-image"
-              loading="eager"
-            />
-          </button>
-          <div>
-            <p className="eyebrow">Familienrezepte</p>
-            <h1>
+        <div className="header-toolbar">
+          <div className="header-left-actions">
+            <div className="header-menu-wrapper">
               <button
                 type="button"
-                className="hero-overview-link hero-overview-title"
-                onClick={onGoToRecipeOverview}
+                className="hamburger-button"
+                aria-label="Navigation öffnen"
+                aria-expanded={menuOpen}
+                aria-controls="main-header-menu"
+                onClick={() => setMenuOpen((current) => !current)}
               >
-                Unsere Rezeptsammlung
+                <span />
+                <span />
+                <span />
               </button>
-            </h1>
-          </div>
-        </div>
-        <p>Rezepte verwalten, Bilder testen und Benutzerrechte steuern.</p>
 
-        <div className="header-toolbar">
-          <div className="header-menu-wrapper">
-            <button
-              type="button"
-              className="hamburger-button"
-              aria-label="Navigation öffnen"
-              aria-expanded={menuOpen}
-              aria-controls="main-header-menu"
-              onClick={() => setMenuOpen((current) => !current)}
-            >
-              <span />
-              <span />
-              <span />
-            </button>
-
-            {menuOpen && (
-              <div id="main-header-menu" className="header-menu" role="menu">
-                {isAuthenticated && (
-                  <button
-                    type="button"
-                    role="menuitem"
-                    className={activeSection === 'recipes' ? 'active' : ''}
-                    onClick={() => selectSection('recipes')}
-                  >
-                    Rezepte
-                  </button>
-                )}
-                <button
-                  type="button"
-                  role="menuitem"
-                  className={activeSection === 'general' ? 'active' : ''}
-                  onClick={() => selectSection('general')}
-                >
-                  System
-                </button>
-                {mayManageUsers && (
-                  <button
-                    type="button"
-                    role="menuitem"
-                    className={activeSection === 'admin' ? 'active' : ''}
-                    onClick={() => selectSection('admin')}
-                  >
-                    Admin
-                  </button>
-                )}
-                <div className="menu-version-box" role="presentation">
-                  <div className="menu-version-label">Version</div>
-                  <div className="menu-version-value">
-                    {versionLoading
-                      ? 'Lade ...'
-                      : systemVersion
-                        ? `${systemVersion.version} (${systemVersion.git_hash})`
-                        : 'Unbekannt'}
-                  </div>
-                  {versionError && (
-                    <div className="menu-version-error">Konnte nicht geladen werden.</div>
+              {menuOpen && (
+                <div id="main-header-menu" className="header-menu" role="menu">
+                  {isAuthenticated && (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className={activeSection === 'recipes' ? 'active' : ''}
+                      onClick={() => selectSection('recipes')}
+                    >
+                      Rezepte
+                    </button>
                   )}
                   <button
                     type="button"
-                    className="menu-version-refresh"
-                    onClick={() => void loadSystemVersion()}
+                    role="menuitem"
+                    className={activeSection === 'general' ? 'active' : ''}
+                    onClick={() => selectSection('general')}
                   >
-                    Aktualisieren
+                    System
                   </button>
+                  {mayManageUsers && (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className={activeSection === 'admin' ? 'active' : ''}
+                      onClick={() => selectSection('admin')}
+                    >
+                      Admin
+                    </button>
+                  )}
+                  <div className="menu-version-box" role="presentation">
+                    <div className="menu-version-label">Version</div>
+                    <div className="menu-version-value">
+                      {versionLoading
+                        ? 'Lade ...'
+                        : systemVersion
+                          ? `${systemVersion.version} (${systemVersion.git_hash})`
+                          : 'Unbekannt'}
+                    </div>
+                    {versionError && (
+                      <div className="menu-version-error">Konnte nicht geladen werden.</div>
+                    )}
+                    <button
+                      type="button"
+                      className="menu-version-refresh"
+                      onClick={() => void loadSystemVersion()}
+                    >
+                      Aktualisieren
+                    </button>
+                  </div>
                 </div>
-              </div>
+              )}
+            </div>
+
+            {showRecipeActions && mayEditRecipes && (
+              <button
+                type="button"
+                className="recipe-create-button"
+                onClick={onRequestCreateRecipe}
+                aria-label="Neues Rezept erstellen"
+              >
+                +
+              </button>
+            )}
+
+            {showRecipeActions && (
+              <button
+                type="button"
+                className="search-toggle"
+                aria-label="Suche"
+                onClick={() => setSearchOpen((current) => !current)}
+              >
+                <svg
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <circle cx="11" cy="11" r="8" />
+                  <path d="m21 21-4.35-4.35" />
+                </svg>
+              </button>
             )}
           </div>
 
-          {showRecipeActions && (
-            <div className="recipe-toolbar-actions">
-              {mayEditRecipes && (
+          {showRecipeActions && searchOpen && (
+            <input
+              type="search"
+              className="header-search-input"
+              aria-label="Rezepte durchsuchen"
+              value={recipeSearchQuery}
+              onChange={(event) => onRecipeSearchChange(event.target.value)}
+              placeholder="Name, Zutat oder Schlagwort"
+            />
+          )}
+
+          <div className="hero-heading">
+            <button
+              type="button"
+              className="hero-overview-link"
+              onClick={onGoToRecipeOverview}
+              aria-label="Zur Rezeptübersicht"
+            >
+              <img
+                src={recipesImage}
+                alt="Rezeptsammlung"
+                className="hero-recipes-image"
+                loading="eager"
+              />
+            </button>
+            <div>
+              <h1>
                 <button
                   type="button"
-                  className="recipe-create-button"
-                  onClick={onRequestCreateRecipe}
+                  className="hero-overview-link hero-overview-title"
+                  onClick={onGoToRecipeOverview}
                 >
-                  +
+                  Rezeptesammlung
                 </button>
-              )}
-              <input
-                type="search"
-                aria-label="Rezepte durchsuchen"
-                value={recipeSearchQuery}
-                onChange={(event) => onRecipeSearchChange(event.target.value)}
-                placeholder="Name, Zutat oder Schlagwort"
-              />
+              </h1>
             </div>
-          )}
+          </div>
         </div>
       </div>
-
-      {user && (
-        <div className="header-user">
-          <div>
-            <strong>
-              {user.first_name} {user.last_name}
-            </strong>
-            <div className="muted">@{user.username}</div>
-          </div>
-          <span className="auth-token">
-            {user.is_super_admin ? 'Super-Admin' : mayManageUsers ? 'Administrator' : 'Benutzer'}
-          </span>
-          <button type="button" className="button-secondary" onClick={logout}>
-            Abmelden
-          </button>
-        </div>
-      )}
     </header>
   );
 }
