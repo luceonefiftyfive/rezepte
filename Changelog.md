@@ -1,5 +1,13 @@
 # Change log
 
+## feat<frontend>: improve header layout and section user info v0.4.0
+
+- Reworked the header layout for authenticated users (sticky top bar, more compact navigation, improved mobile behavior)
+- Added a toggleable recipe search field to the header while keeping the Create action as a quick action
+- Extracted the user information and sign-out functionality into the reusable SectionUserInfo component and integrated it into the Recipes, System, and Admin sections
+  Updated the application to render the System section only when the user is authenticated
+- Added a unit test for toggling the header search in frontend/src/components/AppHeader.test.tsx
+
 ## fix<frontend>: set url' as link v0.3.1
 
 ## feat: add source information to recipes v0.3.0

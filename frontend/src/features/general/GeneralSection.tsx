@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { apiFetch } from '../../api/client';
 import { useAuth } from '../../auth/AuthContext';
+import { SectionUserInfo } from '../../components/SectionUserInfo';
 import type {
   HealthResponse,
   RootResponse,
@@ -75,9 +76,12 @@ export function GeneralSection() {
           <p className="eyebrow">Diagnose</p>
           <h2 id="general-heading">Systemstatus</h2>
         </div>
-        <button type="button" onClick={() => void loadStatus()} disabled={busy}>
-          {busy ? 'Prüfung läuft …' : 'Erneut prüfen'}
-        </button>
+        <div className="section-heading-actions">
+          <SectionUserInfo />
+          <button type="button" onClick={() => void loadStatus()} disabled={busy}>
+            {busy ? 'Prüfung läuft …' : 'Erneut prüfen'}
+          </button>
+        </div>
       </div>
 
       {error && (

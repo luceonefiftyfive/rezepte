@@ -66,7 +66,7 @@ export default function App() {
       />
 
       {!isAuthenticated && <LoginPanel />}
-      {visibleSection === 'general' && <GeneralSection />}
+      {visibleSection === 'general' && isAuthenticated && <GeneralSection />}
       {visibleSection === 'recipes' && isAuthenticated && (
         <RecipeSection
           searchQuery={recipeSearchQuery}
