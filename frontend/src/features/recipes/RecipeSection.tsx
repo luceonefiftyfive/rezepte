@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import QRCode from 'qrcode';
 import { apiFetch } from '../../api/client';
 import { useAuth } from '../../auth/AuthContext';
 import { SectionUserInfo } from '../../components/SectionUserInfo';
@@ -142,6 +143,7 @@ export function RecipeSection({
   >({});
   const [recipeImageUrl, setRecipeImageUrl] = useState<string | null>(null);
   const [stepImageUrls, setStepImageUrls] = useState<Record<string, string>>({});
+  const [printQrCodeDataUrl, setPrintQrCodeDataUrl] = useState<string | null>(null);
 
   const availableTags = useMemo(
     () => Array.from(new Set(recipes.flatMap((recipe) => recipe.tags))).sort(),
@@ -150,6 +152,10 @@ export function RecipeSection({
   const editorGroups = useMemo(
     () => (manageableGroups.length > 0 ? manageableGroups : availableGroups),
     [manageableGroups, availableGroups],
+  );
+  const selectedRecipeShareUrl = useMemo(
+    () => (selectedRecipe ? getRecipeShareUrl(selectedRecipe) : ''),
+    [selectedRecipe],
   );
 
   const visibleRecipes = useMemo(() => {
@@ -312,9 +318,7 @@ export function RecipeSection({
   }
 
   async function copyRecipeLink(recipe: Recipe): Promise<void> {
-    const url = new URL(window.location.href);
-    url.searchParams.set(RECIPE_QUERY_PARAM, recipe.id);
-    const shareUrl = url.toString();
+    const shareUrl = getRecipeShareUrl(recipe);
 
     try {
       if (navigator.clipboard?.writeText) {
@@ -335,6 +339,24 @@ export function RecipeSection({
       setStatus('Rezept-Link wurde in die Zwischenablage kopiert.');
     } catch {
       setError('Link konnte nicht kopiert werden.');
+    }
+  }
+
+  function getRecipeShareUrl(recipe: Recipe): string {
+    if (typeof window === 'undefined') return '';
+    const url = new URL(window.location.href);
+    url.searchParams.set(RECIPE_QUERY_PARAM, recipe.id);
+    return url.toString();
+  }
+
+  function printSelectedRecipe() {
+    if (!selectedRecipe) return;
+
+    setError('');
+    try {
+      window.print();
+    } catch {
+      setError('Druckfunktion wird von diesem Browser nicht unterstuetzt.');
     }
   }
 
@@ -475,6 +497,37 @@ export function RecipeSection({
   }, [recipePreviewImages, selectedRecipe, token]);
 
   useEffect(() => {
+    if (!selectedRecipeShareUrl) {
+      setPrintQrCodeDataUrl(null);
+      return;
+    }
+
+    let active = true;
+
+    void QRCode.toString(selectedRecipeShareUrl, {
+      type: 'svg',
+      width: 132,
+      margin: 1,
+      color: {
+        dark: '#000000',
+        light: '#ffffff',
+      },
+    })
+      .then((svg) => {
+        if (!active) return;
+        setPrintQrCodeDataUrl(`data:image/svg+xml;utf8,${encodeURIComponent(svg)}`);
+      })
+      .catch(() => {
+        if (!active) return;
+        setPrintQrCodeDataUrl(null);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [selectedRecipeShareUrl]);
+
+  useEffect(() => {
     const onPopState = () => {
       setRecipeIdFromUrl(getRecipeIdFromUrl());
     };
@@ -521,7 +574,10 @@ export function RecipeSection({
   }, [overviewRequestVersion]);
 
   return (
-    <section aria-labelledby="recipes-heading">
+    <section
+      aria-labelledby="recipes-heading"
+      className={selectedRecipe ? 'recipe-section recipe-section--detail-open' : 'recipe-section'}
+    >
       <div className="section-heading">
         <div>
           <p className="eyebrow">Geschützter Bereich</p>
@@ -685,14 +741,17 @@ export function RecipeSection({
 
           {selectedRecipe && (
             <>
-              <p className="muted">{selectedRecipe.title}</p>
-              <div className="button-row">
+              <p className="muted print-hide">{selectedRecipe.title}</p>
+              <div className="button-row recipe-detail-actions print-hide">
                 <button
                   type="button"
                   className="button-secondary"
                   onClick={() => void copyRecipeLink(selectedRecipe)}
                 >
                   Link kopieren
+                </button>
+                <button type="button" className="button-secondary" onClick={printSelectedRecipe}>
+                  Drucken / PDF
                 </button>
                 <button
                   type="button"
@@ -711,77 +770,96 @@ export function RecipeSection({
                   Löschen
                 </button>
               </div>
-              {selectedRecipe.description && <p>{selectedRecipe.description}</p>}
-              {selectedRecipe.source && (
-                <p>
-                  <strong>Quelle:</strong> <TextWithLinks text={selectedRecipe.source} />
-                </p>
-              )}
-              {recipeImageUrl && (
-                <img
-                  className="recipe-detail-image"
-                  src={recipeImageUrl}
-                  alt={`Rezeptbild ${selectedRecipe.title}`}
-                />
-              )}
-              <div className="recipe-detail-meta">
-                <p>
-                  <strong>Rezeptbücher:</strong> {selectedRecipe.group_ids.join(', ') || 'keine'}
-                </p>
-                <p>
-                  <strong>Schlagwörter:</strong> {selectedRecipe.tags.join(', ') || 'keine'}
-                </p>
-                <p>
-                  <strong>Portionen:</strong> {selectedRecipe.yield.amount}{' '}
-                  {selectedRecipe.yield.unit}
-                </p>
-                <p>
-                  <strong>Vorbereitung:</strong> {selectedRecipe.time.preparation_minutes ?? '–'}{' '}
-                  min · <strong>Kochen:</strong> {selectedRecipe.time.cooking_minutes ?? '–'} min ·{' '}
-                  <strong>Ruhen:</strong> {selectedRecipe.time.resting_minutes ?? '–'} min
-                </p>
-              </div>
-              {selectedRecipe.ingredient_sections.map((section) => (
-                <div key={section.id}>
-                  <h4>{section.name ?? 'Zutaten'}</h4>
-                  <ul>
-                    {section.ingredients.map((ingredient, index) => (
-                      <li key={`${section.id}-${index}`}>
-                        {ingredient.amount
-                          ? `${ingredient.amount} ${getIngredientUnitLabel(ingredient.unit, ingredient.custom_unit)} `
-                          : ''}
-                        <strong>{ingredient.name}</strong>
-                        {ingredient.preparation ? `, ${ingredient.preparation}` : ''}
-                        {ingredient.optional ? ' (optional)' : ''}
-                        {ingredient.remarks ? ` — ${ingredient.remarks}` : ''}
+              <div className="recipe-print-content">
+                <div className="recipe-print-header print-only">
+                  <div className="recipe-print-title-row">
+                    <h1 className="recipe-print-title">{selectedRecipe.title}</h1>
+                    {printQrCodeDataUrl && (
+                      <img
+                        className="recipe-print-qr"
+                        src={printQrCodeDataUrl}
+                        alt="QR-Code fuer Rezept-Link"
+                      />
+                    )}
+                  </div>
+                  <div className="recipe-print-link-block">
+                    <p className="recipe-print-link">
+                      Rezept-Link: <a href={selectedRecipeShareUrl}>{selectedRecipeShareUrl}</a>
+                    </p>
+                  </div>
+                </div>
+                {selectedRecipe.description && <p>{selectedRecipe.description}</p>}
+                {selectedRecipe.source && (
+                  <p>
+                    <strong>Quelle:</strong> <TextWithLinks text={selectedRecipe.source} />
+                  </p>
+                )}
+                {recipeImageUrl && (
+                  <img
+                    className="recipe-detail-image"
+                    src={recipeImageUrl}
+                    alt={`Rezeptbild ${selectedRecipe.title}`}
+                  />
+                )}
+                <div className="recipe-detail-meta">
+                  <p>
+                    <strong>Rezeptbücher:</strong> {selectedRecipe.group_ids.join(', ') || 'keine'}
+                  </p>
+                  <p>
+                    <strong>Schlagwörter:</strong> {selectedRecipe.tags.join(', ') || 'keine'}
+                  </p>
+                  <p>
+                    <strong>Portionen:</strong> {selectedRecipe.yield.amount}{' '}
+                    {selectedRecipe.yield.unit}
+                  </p>
+                  <p>
+                    <strong>Vorbereitung:</strong> {selectedRecipe.time.preparation_minutes ?? '–'}{' '}
+                    min · <strong>Kochen:</strong> {selectedRecipe.time.cooking_minutes ?? '–'} min
+                    · <strong>Ruhen:</strong> {selectedRecipe.time.resting_minutes ?? '–'} min
+                  </p>
+                </div>
+                {selectedRecipe.ingredient_sections.map((section) => (
+                  <div key={section.id}>
+                    <h4>{section.name ?? 'Zutaten'}</h4>
+                    <ul>
+                      {section.ingredients.map((ingredient, index) => (
+                        <li key={`${section.id}-${index}`}>
+                          {ingredient.amount
+                            ? `${ingredient.amount} ${getIngredientUnitLabel(ingredient.unit, ingredient.custom_unit)} `
+                            : ''}
+                          <strong>{ingredient.name}</strong>
+                          {ingredient.preparation ? `, ${ingredient.preparation}` : ''}
+                          {ingredient.optional ? ' (optional)' : ''}
+                          {ingredient.remarks ? ` — ${ingredient.remarks}` : ''}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+                <div>
+                  <h4>Zubereitung</h4>
+                  <ol>
+                    {selectedRecipe.instructions.map((step) => (
+                      <li key={step.id}>
+                        {step.text}
+                        {stepImageUrls[step.id] && (
+                          <img
+                            className="recipe-step-image"
+                            src={stepImageUrls[step.id]}
+                            alt={`Schrittbild ${selectedRecipe.title}`}
+                          />
+                        )}
                       </li>
                     ))}
-                  </ul>
+                  </ol>
                 </div>
-              ))}
-              <div>
-                <h4>Zubereitung</h4>
-                <ol>
-                  {selectedRecipe.instructions.map((step) => (
-                    <li key={step.id}>
-                      {step.text}
-                      {stepImageUrls[step.id] && (
-                        <img
-                          className="recipe-step-image"
-                          src={stepImageUrls[step.id]}
-                          alt={`Schrittbild ${selectedRecipe.title}`}
-                        />
-                      )}
-                    </li>
-                  ))}
-                </ol>
+                {selectedRecipe.remarks && (
+                  <div>
+                    <h4>Bemerkungen</h4>
+                    <p>{selectedRecipe.remarks}</p>
+                  </div>
+                )}
               </div>
-              {selectedRecipe.remarks && (
-                <div>
-                  <h4>Bemerkungen</h4>
-                  <p>{selectedRecipe.remarks}</p>
-                </div>
-              )}
             </>
           )}
         </div>

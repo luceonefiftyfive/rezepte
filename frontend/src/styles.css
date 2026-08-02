@@ -948,6 +948,131 @@ textarea {
   background: #e5e7eb;
   font-size: 12px;
 }
+
+.print-only {
+  display: none;
+}
+
+@media print {
+  :root {
+    background: #ffffff;
+    color: #000000;
+  }
+
+  body,
+  #root,
+  .page {
+    height: auto;
+    max-height: none;
+    overflow: visible;
+    background: #ffffff;
+  }
+
+  .page {
+    width: 100%;
+    margin: 0;
+    padding: 0;
+  }
+
+  .hero,
+  .recipe-section > .section-heading,
+  .recipe-section > .card > .section-heading,
+  .print-hide,
+  .section-heading-actions,
+  .category-row,
+  .auth-status,
+  .auth-error {
+    display: none !important;
+  }
+
+  .card {
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: #ffffff;
+    box-shadow: none;
+  }
+
+  .recipe-section:not(.recipe-section--detail-open) .card,
+  .recipe-overview-grid,
+  .recipe-toolbar-actions {
+    display: none;
+  }
+
+  .recipe-print-content a {
+    color: #000000;
+    text-decoration: none;
+  }
+
+  .recipe-print-content a[href]::after {
+    content: ' (' attr(href) ')';
+    font-size: 12px;
+  }
+
+  .print-only {
+    display: block !important;
+  }
+
+  .recipe-print-header {
+    margin-bottom: 14px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #d1d5db;
+  }
+
+  .recipe-print-title-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+  }
+
+  .recipe-print-title {
+    margin: 0;
+    font-size: 28px;
+    line-height: 1.2;
+  }
+
+  .recipe-print-link {
+    margin: 8px 0 0;
+    font-size: 12px;
+    overflow-wrap: anywhere;
+  }
+
+  .recipe-print-link-block {
+    display: block;
+  }
+
+  .recipe-print-link a[href]::after {
+    content: '';
+  }
+
+  .recipe-print-qr {
+    width: 108px;
+    height: 108px;
+    flex-shrink: 0;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    padding: 4px;
+    background: #ffffff;
+  }
+
+  .recipe-detail-image,
+  .recipe-step-image {
+    width: 100%;
+    max-width: 100%;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  h2,
+  h3,
+  h4 {
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+}
+
 @media (max-width: 900px) {
   .form-grid.three,
   .form-grid.four {

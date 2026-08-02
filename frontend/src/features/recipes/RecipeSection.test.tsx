@@ -1,14 +1,21 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { RecipeSection } from './RecipeSection';
+import QRCode from 'qrcode';
 
 vi.mock('../../auth/AuthContext', () => ({
   useAuth: () => ({ token: 'test-token', mayEditRecipes: true }),
 }));
 vi.mock('../../api/client', () => ({ apiFetch: vi.fn() }));
+vi.mock('qrcode', () => ({
+  default: {
+    toString: vi.fn().mockResolvedValue('<svg xmlns="http://www.w3.org/2000/svg"></svg>'),
+  },
+}));
 
 import { apiFetch } from '../../api/client';
 const mockedApiFetch = vi.mocked(apiFetch);
+const mockedQrCodeToString = vi.mocked(QRCode.toString);
 
 describe('RecipeSection', () => {
   function mockGroups() {
@@ -48,6 +55,7 @@ describe('RecipeSection', () => {
 
   beforeEach(() => {
     mockedApiFetch.mockReset();
+    mockedQrCodeToString.mockImplementation(() => new Promise<string>(() => {}));
     window.history.replaceState({}, '', '/');
   });
 
@@ -472,6 +480,53 @@ describe('RecipeSection', () => {
 
     await waitFor(() => expect(writeText).toHaveBeenCalled());
     expect(writeText.mock.calls[0]?.[0]).toContain('?recipe=recipe-1');
-    expect(screen.getByText('Rezept-Link wurde in die Zwischenablage kopiert.')).toBeInTheDocument();
+    expect(
+      screen.getByText('Rezept-Link wurde in die Zwischenablage kopiert.'),
+    ).toBeInTheDocument();
+  });
+
+  it('opens print dialog from recipe detail view for PDF export', async () => {
+    mockGroups();
+    const printSpy = vi.spyOn(window, 'print').mockImplementation(() => undefined);
+    mockedQrCodeToString.mockImplementationOnce(
+      async () => '<svg xmlns="http://www.w3.org/2000/svg"></svg>',
+    );
+    window.history.replaceState({}, '', '/?foo=bar');
+    mockedApiFetch.mockResolvedValueOnce([
+      {
+        id: 'recipe-1',
+        title: 'Brot',
+        description: 'Einfach',
+        group_ids: ['family'],
+        tags: ['Backen'],
+        time: { preparation_minutes: 10, cooking_minutes: 40, resting_minutes: 60 },
+        yield: { amount: '1', unit: 'Laib' },
+        ingredient_sections: [],
+        instructions: [],
+        remarks: null,
+        created_at: '2026-07-12T12:00:00Z',
+        updated_at: '2026-07-12T12:00:00Z',
+        version: 1,
+      },
+    ]);
+
+    render(<RecipeSection />);
+    await waitFor(() => expect(screen.getByText('Brot')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole('button', { name: /Rezept anzeigen Brot/i }));
+    const printableLink = document.querySelector('.recipe-print-link a');
+    expect(printableLink).not.toBeNull();
+    expect(printableLink).toHaveAttribute(
+      'href',
+      expect.stringContaining('?foo=bar&recipe=recipe-1'),
+    );
+    await waitFor(() =>
+      expect(screen.getByAltText('QR-Code fuer Rezept-Link')).toBeInTheDocument(),
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Drucken / PDF' }));
+
+    expect(printSpy).toHaveBeenCalledTimes(1);
+    printSpy.mockRestore();
   });
 });
