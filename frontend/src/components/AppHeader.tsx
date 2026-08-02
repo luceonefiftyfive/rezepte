@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { apiFetch } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import type { SystemVersionResponse } from '../types';
-import recipesImage from '../../img/recipes.png';
+import recipesLogo from '../../img/rezepte-logo-sage.png';
 
 type Section = 'general' | 'recipes' | 'admin';
 
@@ -181,7 +181,7 @@ export function AppHeader({
               aria-label="Zur Rezeptübersicht"
             >
               <img
-                src={recipesImage}
+                src={recipesLogo}
                 alt="Rezeptsammlung"
                 className="hero-recipes-image"
                 loading="eager"
