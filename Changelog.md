@@ -1,5 +1,10 @@
 # Change log
 
+## chore<frontend>: enable url links to receipe v0.4.2
+
+- url of recipes can be copied and later directly used
+- test is added
+
 ## chore<frontend>: adapt site image v0.4.1
 
 ## feat<frontend>: improve header layout and section user info v0.4.0

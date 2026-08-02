@@ -48,6 +48,7 @@ describe('RecipeSection', () => {
 
   beforeEach(() => {
     mockedApiFetch.mockReset();
+    window.history.replaceState({}, '', '/');
   });
 
   it('renders recipes returned by the backend in the overview list', async () => {
@@ -407,5 +408,70 @@ describe('RecipeSection', () => {
     render(<RecipeSection />);
 
     await waitFor(() => expect(screen.getByText('Brot')).toBeInTheDocument());
+  });
+
+  it('opens a recipe detail automatically when recipe id is present in URL', async () => {
+    mockGroups();
+    window.history.replaceState({}, '', '/?recipe=recipe-1');
+    mockedApiFetch.mockResolvedValueOnce([
+      {
+        id: 'recipe-1',
+        title: 'Brot',
+        description: 'Einfach',
+        group_ids: ['family'],
+        tags: ['Backen'],
+        time: { preparation_minutes: 10, cooking_minutes: 40, resting_minutes: 60 },
+        yield: { amount: '1', unit: 'Laib' },
+        ingredient_sections: [],
+        instructions: [],
+        remarks: null,
+        created_at: '2026-07-12T12:00:00Z',
+        updated_at: '2026-07-12T12:00:00Z',
+        version: 1,
+      },
+    ]);
+
+    render(<RecipeSection />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Rezept ansehen' })).toBeInTheDocument();
+      expect(screen.getByText('Einfach')).toBeInTheDocument();
+    });
+  });
+
+  it('copies a shareable recipe link from detail view', async () => {
+    mockGroups();
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(window.navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText },
+    });
+    mockedApiFetch.mockResolvedValueOnce([
+      {
+        id: 'recipe-1',
+        title: 'Brot',
+        description: 'Einfach',
+        group_ids: ['family'],
+        tags: ['Backen'],
+        time: { preparation_minutes: 10, cooking_minutes: 40, resting_minutes: 60 },
+        yield: { amount: '1', unit: 'Laib' },
+        ingredient_sections: [],
+        instructions: [],
+        remarks: null,
+        created_at: '2026-07-12T12:00:00Z',
+        updated_at: '2026-07-12T12:00:00Z',
+        version: 1,
+      },
+    ]);
+
+    render(<RecipeSection />);
+    await waitFor(() => expect(screen.getByText('Brot')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole('button', { name: /Rezept anzeigen Brot/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Link kopieren' }));
+
+    await waitFor(() => expect(writeText).toHaveBeenCalled());
+    expect(writeText.mock.calls[0]?.[0]).toContain('?recipe=recipe-1');
+    expect(screen.getByText('Rezept-Link wurde in die Zwischenablage kopiert.')).toBeInTheDocument();
   });
 });
