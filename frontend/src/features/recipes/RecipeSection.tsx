@@ -13,6 +13,8 @@ import type {
 } from '../../types';
 import { RecipeEditor } from './RecipeEditor';
 
+const RECIPE_QUERY_PARAM = 'recipe';
+
 const unitLabels: Record<Exclude<Unit, 'custom'>, string> = {
   g: 'g',
   kg: 'kg',
@@ -86,6 +88,29 @@ function formatIngredient(recipe: Recipe): string {
     .join(' ');
 }
 
+function getRecipeIdFromUrl(): string | null {
+  if (typeof window === 'undefined') return null;
+  const recipeId = new URLSearchParams(window.location.search).get(RECIPE_QUERY_PARAM);
+  return recipeId?.trim() || null;
+}
+
+function setRecipeIdInUrl(recipeId: string | null): void {
+  if (typeof window === 'undefined') return;
+  const nextUrl = new URL(window.location.href);
+
+  if (recipeId) {
+    nextUrl.searchParams.set(RECIPE_QUERY_PARAM, recipeId);
+  } else {
+    nextUrl.searchParams.delete(RECIPE_QUERY_PARAM);
+  }
+
+  window.history.replaceState(
+    window.history.state,
+    '',
+    `${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`,
+  );
+}
+
 interface RecipeSectionProps {
   searchQuery?: string;
   createRequestVersion?: number;
@@ -99,6 +124,7 @@ export function RecipeSection({
 }: RecipeSectionProps) {
   const { token, mayEditRecipes } = useAuth();
   const lastLoadedRecipeSelectionRef = useRef<string | null>(null);
+  const [recipeIdFromUrl, setRecipeIdFromUrl] = useState<string | null>(() => getRecipeIdFromUrl());
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [recipeSort, setRecipeSort] = useState<RecipeListSort>('created_desc');
   const [availableGroups, setAvailableGroups] = useState<Group[]>([]);
@@ -270,15 +296,46 @@ export function RecipeSection({
 
   function openRecipeDetail(recipe: Recipe) {
     setSelectedRecipe(recipe);
+    setRecipeIdFromUrl(recipe.id);
+    setRecipeIdInUrl(recipe.id);
     setEditing(null);
     setIsEditorOpen(false);
   }
 
   function openRecipeEditor(recipe?: Recipe | null) {
+    setRecipeIdFromUrl(null);
+    setRecipeIdInUrl(null);
     setSelectedRecipe(null);
     setEditing(recipe ?? null);
     setIsEditorOpen(true);
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  async function copyRecipeLink(recipe: Recipe): Promise<void> {
+    const url = new URL(window.location.href);
+    url.searchParams.set(RECIPE_QUERY_PARAM, recipe.id);
+    const shareUrl = url.toString();
+
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(shareUrl);
+      } else {
+        const helper = document.createElement('textarea');
+        helper.value = shareUrl;
+        helper.setAttribute('readonly', '');
+        helper.style.position = 'fixed';
+        helper.style.opacity = '0';
+        document.body.appendChild(helper);
+        helper.select();
+        document.execCommand('copy');
+        document.body.removeChild(helper);
+      }
+
+      setError('');
+      setStatus('Rezept-Link wurde in die Zwischenablage kopiert.');
+    } catch {
+      setError('Link konnte nicht kopiert werden.');
+    }
   }
 
   async function uploadRecipeImage(recipeId: string, file: File): Promise<ImageUploadResponse> {
@@ -418,6 +475,37 @@ export function RecipeSection({
   }, [recipePreviewImages, selectedRecipe, token]);
 
   useEffect(() => {
+    const onPopState = () => {
+      setRecipeIdFromUrl(getRecipeIdFromUrl());
+    };
+
+    window.addEventListener('popstate', onPopState);
+    return () => {
+      window.removeEventListener('popstate', onPopState);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!selectedRecipe) return;
+    const refreshedSelectedRecipe = recipes.find((recipe) => recipe.id === selectedRecipe.id);
+    if (refreshedSelectedRecipe && refreshedSelectedRecipe !== selectedRecipe) {
+      setSelectedRecipe(refreshedSelectedRecipe);
+    }
+  }, [recipes, selectedRecipe]);
+
+  useEffect(() => {
+    if (!recipeIdFromUrl) return;
+    if (isEditorOpen) return;
+    if (selectedRecipe?.id === recipeIdFromUrl) return;
+
+    const targetRecipe = recipes.find((recipe) => recipe.id === recipeIdFromUrl);
+    if (targetRecipe) {
+      setSelectedRecipe(targetRecipe);
+      setEditing(null);
+    }
+  }, [isEditorOpen, recipeIdFromUrl, recipes, selectedRecipe]);
+
+  useEffect(() => {
     if (createRequestVersion === 0) return;
     if (!mayEditRecipes) return;
     openRecipeEditor();
@@ -427,6 +515,8 @@ export function RecipeSection({
     if (overviewRequestVersion === 0) return;
     setEditing(null);
     setIsEditorOpen(false);
+    setRecipeIdFromUrl(null);
+    setRecipeIdInUrl(null);
     setSelectedRecipe(null);
   }, [overviewRequestVersion]);
 
@@ -519,7 +609,11 @@ export function RecipeSection({
                 <button
                   type="button"
                   className="button-secondary"
-                  onClick={() => setSelectedRecipe(null)}
+                  onClick={() => {
+                    setRecipeIdFromUrl(null);
+                    setRecipeIdInUrl(null);
+                    setSelectedRecipe(null);
+                  }}
                 >
                   Zur Übersicht
                 </button>
@@ -593,6 +687,13 @@ export function RecipeSection({
             <>
               <p className="muted">{selectedRecipe.title}</p>
               <div className="button-row">
+                <button
+                  type="button"
+                  className="button-secondary"
+                  onClick={() => void copyRecipeLink(selectedRecipe)}
+                >
+                  Link kopieren
+                </button>
                 <button
                   type="button"
                   className="button-secondary"
