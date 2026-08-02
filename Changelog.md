@@ -1,5 +1,7 @@
 # Change log
 
+## chore<frontend>: adapt site image v0.4.1
+
 ## feat<frontend>: improve header layout and section user info v0.4.0
 
 - Reworked the header layout for authenticated users (sticky top bar, more compact navigation, improved mobile behavior)
