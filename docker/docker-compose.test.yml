@@ -11,6 +11,7 @@ services:
   backend:
     environment:
       REZEPTE_TEST: '1'
+      WEBAUTHN_RP_ID: ${WEBAUTHN_RP_ID:-localhost}
     depends_on:
       mongodb:
         condition: service_healthy

@@ -7,6 +7,10 @@ from app.models.user import (
     GroupsUpdate,
     LoginRequest,
     OwnProfileUpdate,
+    PasskeyAuthenticationOptionsRequest,
+    PasskeyAuthenticationVerifyRequest,
+    PasskeyOptionsResponse,
+    PasskeyRegistrationVerifyRequest,
     Role,
     SuperAdminUpdate,
     TokenResponse,
@@ -89,6 +93,53 @@ async def login(
     )
 
 
+@router.post("/auth/passkey/register/options", response_model=PasskeyOptionsResponse)
+async def passkey_registration_options(
+    service: ty.Annotated[UserService, Depends(get_user_service)],
+    current_user: ty.Annotated[dict, Depends(get_current_user)],
+):
+    return PasskeyOptionsResponse(
+        options=await service.begin_passkey_registration(current_user)
+    )
+
+
+@router.post("/auth/passkey/register/verify", response_model=UserPublic)
+async def passkey_registration_verify(
+    data: PasskeyRegistrationVerifyRequest,
+    service: ty.Annotated[UserService, Depends(get_user_service)],
+    current_user: ty.Annotated[dict, Depends(get_current_user)],
+):
+    updated = await service.complete_passkey_registration(
+        current_user,
+        data.credential,
+        data.credential_name,
+    )
+    return user_to_public(updated)
+
+
+@router.post("/auth/passkey/login/options", response_model=PasskeyOptionsResponse)
+async def passkey_login_options(
+    data: PasskeyAuthenticationOptionsRequest,
+    service: ty.Annotated[UserService, Depends(get_user_service)],
+):
+    return PasskeyOptionsResponse(
+        options=await service.begin_passkey_authentication(data.username.strip())
+    )
+
+
+@router.post("/auth/passkey/login/verify", response_model=TokenResponse)
+async def passkey_login_verify(
+    data: PasskeyAuthenticationVerifyRequest,
+    service: ty.Annotated[UserService, Depends(get_user_service)],
+):
+    user = await service.authenticate_user_with_passkey(
+        data.username.strip(), data.credential
+    )
+    return TokenResponse(
+        access_token=create_access_token(str(user["_id"])), user=user_to_public(user)
+    )
+
+
 @router.get("/auth/me", response_model=UserPublic)
 async def identify_current_user(
     current_user: ty.Annotated[dict, Depends(get_current_user)],
@@ -110,9 +161,9 @@ async def create_user(
 async def list_users(
     db: ty.Annotated[AsyncIOMotorDatabase, Depends(get_db)],
     current_user: ty.Annotated[dict, Depends(require_admin_or_super_admin)],
-    group_id: ty.Optional[str] = Query(default=None),
-    role: ty.Optional[Role] = Query(default=None),
-    email_verified: ty.Optional[bool] = Query(default=None),
+    group_id: str | None = Query(default=None),
+    role: Role | None = Query(default=None),
+    email_verified: bool | None = Query(default=None),
 ):
     repository = UserRepository(db)
     users = await repository.list_users(

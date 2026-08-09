@@ -243,6 +243,14 @@ body {
   white-space: nowrap;
 }
 
+.section-user .auth-passkey-message {
+  width: 100%;
+  margin-top: 2px;
+  font-size: 11px;
+  color: #1f2937;
+  text-align: right;
+}
+
 .recipe-create-button,
 .search-toggle {
   min-width: 44px;
@@ -319,6 +327,10 @@ h2 {
   display: flex;
   gap: 12px;
   flex-wrap: wrap;
+}
+
+.auth-form-actions {
+  margin-top: 8px;
 }
 
 button {

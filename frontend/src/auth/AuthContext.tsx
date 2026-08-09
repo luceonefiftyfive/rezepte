@@ -1,5 +1,10 @@
 import { createContext, ReactNode, useContext, useEffect, useMemo, useState } from 'react';
 import { apiFetch } from '../api/client';
+import { startAuthentication, startRegistration } from '@simplewebauthn/browser';
+import type {
+  PublicKeyCredentialCreationOptionsJSON,
+  PublicKeyCredentialRequestOptionsJSON,
+} from '@simplewebauthn/browser';
 import type { TokenResponse, UserPublic } from '../types';
 
 const TOKEN_KEY = 'rezepte-auth-token';
@@ -13,6 +18,8 @@ type AuthContextValue = {
   mayManageGroups: boolean;
   mayEditRecipes: boolean;
   login: (username: string, password: string) => Promise<void>;
+  loginWithPasskey: (username: string) => Promise<void>;
+  registerPasskey: (credentialName?: string) => Promise<void>;
   logout: () => void;
   refreshUser: () => Promise<void>;
 };
@@ -60,6 +67,67 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(response.user);
   }
 
+  async function loginWithPasskey(username: string): Promise<void> {
+    const trimmedUsername = username.trim();
+    if (!trimmedUsername) {
+      throw new Error('Bitte Benutzernamen eingeben');
+    }
+
+    const optionsResponse = await apiFetch<{ options: PublicKeyCredentialRequestOptionsJSON }>(
+      '/auth/passkey/login/options',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: trimmedUsername }),
+      },
+      null,
+    );
+    const credential = await startAuthentication({
+      optionsJSON: optionsResponse.options,
+    });
+
+    const response = await apiFetch<TokenResponse>(
+      '/auth/passkey/login/verify',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: trimmedUsername, credential }),
+      },
+      null,
+    );
+    setToken(response.access_token);
+    setUser(response.user);
+  }
+
+  async function registerPasskey(credentialName?: string): Promise<void> {
+    if (!token) {
+      throw new Error('Nicht angemeldet');
+    }
+
+    const optionsResponse = await apiFetch<{ options: PublicKeyCredentialCreationOptionsJSON }>(
+      '/auth/passkey/register/options',
+      { method: 'POST' },
+      token,
+    );
+    const credential = await startRegistration({
+      optionsJSON: optionsResponse.options,
+    });
+
+    const updatedUser = await apiFetch<UserPublic>(
+      '/auth/passkey/register/verify',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          credential,
+          credential_name: credentialName,
+        }),
+      },
+      token,
+    );
+    setUser(updatedUser);
+  }
+
   function logout(): void {
     setToken(null);
     setUser(null);
@@ -88,6 +156,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         user?.groups.some((group) => group.role === 'admin' || group.role === 'author'),
       ),
       login,
+      loginWithPasskey,
+      registerPasskey,
       logout,
       refreshUser,
     }),

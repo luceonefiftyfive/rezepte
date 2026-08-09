@@ -1,5 +1,9 @@
 # Change log
 
+## feat: add support passkey v0.5.0
+
+- Added possibilty to use passkey for athentication
+
 ## chore(frontend): add recipe print and PDF export v0.4.3
 
 - Added a `Drucken (Print) / PDF` action in recipe detail view to open the browser print dialog.

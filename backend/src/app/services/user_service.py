@@ -1,4 +1,7 @@
 import logging
+from base64 import urlsafe_b64decode, urlsafe_b64encode
+from functools import lru_cache
+from typing import Any
 
 from app.core.security import hash_password, now_utc, verify_password
 from app.core.settings import settings
@@ -73,6 +76,295 @@ class UserService:
             return None
         log.info("User '%s' authenticated successfully", username)
         return user
+
+    @staticmethod
+    def _b64url_encode(raw: bytes) -> str:
+        return urlsafe_b64encode(raw).rstrip(b"=").decode("ascii")
+
+    @staticmethod
+    def _b64url_decode(value: str) -> bytes:
+        padding = "=" * (-len(value) % 4)
+        return urlsafe_b64decode(f"{value}{padding}")
+
+    @staticmethod
+    @lru_cache(maxsize=1)
+    def _load_webauthn() -> dict[str, Any]:
+        try:
+            from webauthn import (  # type: ignore
+                generate_authentication_options,
+                generate_registration_options,
+                options_to_json,
+                verify_authentication_response,
+                verify_registration_response,
+            )
+            from webauthn.helpers.structs import (  # type: ignore
+                AttestationConveyancePreference,
+                AuthenticatorSelectionCriteria,
+                PublicKeyCredentialDescriptor,
+                ResidentKeyRequirement,
+                UserVerificationRequirement,
+            )
+        except ImportError as exc:  # pragma: no cover
+            raise HTTPException(
+                status_code=500,
+                detail=(
+                    "Passkey support is not available on the server. "
+                    "Install the 'webauthn' package in the backend environment."
+                ),
+            ) from exc
+
+        return {
+            "generate_authentication_options": generate_authentication_options,
+            "generate_registration_options": generate_registration_options,
+            "options_to_json": options_to_json,
+            "verify_authentication_response": verify_authentication_response,
+            "verify_registration_response": verify_registration_response,
+            "AttestationConveyancePreference": AttestationConveyancePreference,
+            "AuthenticatorSelectionCriteria": AuthenticatorSelectionCriteria,
+            "PublicKeyCredentialDescriptor": PublicKeyCredentialDescriptor,
+            "ResidentKeyRequirement": ResidentKeyRequirement,
+            "UserVerificationRequirement": UserVerificationRequirement,
+        }
+
+    @staticmethod
+    def _parse_options(options_to_json, generated_options: Any) -> dict[str, Any]:
+        raw = options_to_json(generated_options)
+        if isinstance(raw, str):
+            import json
+
+            return json.loads(raw)
+        if isinstance(raw, dict):
+            return raw
+        raise HTTPException(
+            status_code=500, detail="Could not serialize passkey options"
+        )
+
+    async def begin_passkey_registration(self, current_user: dict) -> dict[str, Any]:
+        webauthn = self._load_webauthn()
+        existing_credentials = []
+        for credential in current_user.get("passkeys", []):
+            existing_credentials.append(
+                webauthn["PublicKeyCredentialDescriptor"](
+                    id=self._b64url_decode(credential["credential_id"])
+                )
+            )
+
+        user_display_name = (
+            f"{current_user.get('first_name', '')} {current_user.get('last_name', '')}".strip()
+            or current_user["username"]
+        )
+        user_verification = (
+            webauthn["UserVerificationRequirement"].REQUIRED
+            if settings.webauthn_require_user_verification
+            else webauthn["UserVerificationRequirement"].PREFERRED
+        )
+        options = webauthn["generate_registration_options"](
+            rp_id=settings.webauthn_rp_id,
+            rp_name=settings.webauthn_rp_name,
+            user_id=str(current_user["_id"]).encode("utf-8"),
+            user_name=current_user["username"],
+            user_display_name=user_display_name,
+            exclude_credentials=existing_credentials,
+            attestation=webauthn["AttestationConveyancePreference"].NONE,
+            authenticator_selection=webauthn["AuthenticatorSelectionCriteria"](
+                resident_key=webauthn["ResidentKeyRequirement"].PREFERRED,
+                user_verification=user_verification,
+            ),
+        )
+
+        options_payload = self._parse_options(webauthn["options_to_json"], options)
+        challenge = options_payload.get("challenge")
+        if not isinstance(challenge, str) or not challenge:
+            raise HTTPException(
+                status_code=500, detail="Invalid passkey registration challenge"
+            )
+
+        await self.repository.update_by_object_id(
+            current_user["_id"],
+            {
+                "passkey_registration_challenge": challenge,
+                "passkey_registration_started_at": now_utc(),
+                "updated_at": now_utc(),
+            },
+        )
+        return options_payload
+
+    async def complete_passkey_registration(
+        self,
+        current_user: dict,
+        credential: dict[str, Any],
+        credential_name: str | None = None,
+    ) -> dict:
+        webauthn = self._load_webauthn()
+        expected_challenge = current_user.get("passkey_registration_challenge")
+        if not expected_challenge:
+            raise HTTPException(
+                status_code=400,
+                detail="No passkey registration in progress. Request options first.",
+            )
+
+        try:
+            verification = webauthn["verify_registration_response"](
+                credential=credential,
+                expected_challenge=expected_challenge,
+                expected_rp_id=settings.webauthn_rp_id,
+                expected_origin=settings.webauthn_origin,
+                require_user_verification=settings.webauthn_require_user_verification,
+            )
+        except Exception as exc:
+            raise HTTPException(
+                status_code=400, detail=f"Passkey registration failed: {exc}"
+            ) from exc
+
+        credential_id = self._b64url_encode(verification.credential_id)
+        passkeys = [*current_user.get("passkeys", [])]
+        if any(item.get("credential_id") == credential_id for item in passkeys):
+            raise HTTPException(status_code=409, detail="Passkey already registered")
+
+        timestamp = now_utc()
+        passkeys.append(
+            {
+                "credential_id": credential_id,
+                "public_key": self._b64url_encode(verification.credential_public_key),
+                "sign_count": int(verification.sign_count),
+                "transports": credential.get("response", {}).get("transports", []),
+                "device_type": str(verification.credential_device_type),
+                "backed_up": bool(verification.credential_backed_up),
+                "name": credential_name.strip() if credential_name else None,
+                "created_at": timestamp,
+                "last_used_at": None,
+            }
+        )
+
+        updated = await self.repository.update_by_object_id(
+            current_user["_id"],
+            {
+                "passkeys": passkeys,
+                "passkey_registration_challenge": None,
+                "passkey_registration_started_at": None,
+                "updated_at": timestamp,
+            },
+        )
+        if not updated:
+            raise HTTPException(status_code=404, detail="User not found")
+        return updated
+
+    async def begin_passkey_authentication(self, username: str) -> dict[str, Any]:
+        webauthn = self._load_webauthn()
+        user = await self.repository.find_by_username(username, active_only=True)
+        if not user:
+            raise HTTPException(status_code=401, detail="Invalid username")
+
+        passkeys = user.get("passkeys", [])
+        if not passkeys:
+            raise HTTPException(
+                status_code=400,
+                detail="No passkey registered for this user",
+            )
+
+        allow_credentials = [
+            webauthn["PublicKeyCredentialDescriptor"](
+                id=self._b64url_decode(item["credential_id"]),
+                transports=item.get("transports") or None,
+            )
+            for item in passkeys
+        ]
+        user_verification = (
+            webauthn["UserVerificationRequirement"].REQUIRED
+            if settings.webauthn_require_user_verification
+            else webauthn["UserVerificationRequirement"].PREFERRED
+        )
+        options = webauthn["generate_authentication_options"](
+            rp_id=settings.webauthn_rp_id,
+            allow_credentials=allow_credentials,
+            user_verification=user_verification,
+        )
+        options_payload = self._parse_options(webauthn["options_to_json"], options)
+        challenge = options_payload.get("challenge")
+        if not isinstance(challenge, str) or not challenge:
+            raise HTTPException(
+                status_code=500, detail="Invalid passkey authentication challenge"
+            )
+
+        await self.repository.update_by_object_id(
+            user["_id"],
+            {
+                "passkey_authentication_challenge": challenge,
+                "passkey_authentication_started_at": now_utc(),
+                "updated_at": now_utc(),
+            },
+        )
+        return options_payload
+
+    async def authenticate_user_with_passkey(
+        self, username: str, credential: dict[str, Any]
+    ) -> dict:
+        webauthn = self._load_webauthn()
+        user = await self.repository.find_by_username(username, active_only=True)
+        if not user:
+            raise HTTPException(status_code=401, detail="Invalid username")
+
+        expected_challenge = user.get("passkey_authentication_challenge")
+        if not expected_challenge:
+            raise HTTPException(
+                status_code=400,
+                detail="No passkey authentication in progress. Request options first.",
+            )
+
+        credential_id = credential.get("id")
+        if not isinstance(credential_id, str) or not credential_id:
+            raise HTTPException(
+                status_code=400, detail="Passkey credential id is missing"
+            )
+
+        passkeys = user.get("passkeys", [])
+        index = next(
+            (
+                i
+                for i, item in enumerate(passkeys)
+                if item.get("credential_id") == credential_id
+            ),
+            -1,
+        )
+        if index < 0:
+            raise HTTPException(status_code=401, detail="Unknown passkey credential")
+
+        matched_passkey = passkeys[index]
+        try:
+            verification = webauthn["verify_authentication_response"](
+                credential=credential,
+                expected_challenge=expected_challenge,
+                expected_rp_id=settings.webauthn_rp_id,
+                expected_origin=settings.webauthn_origin,
+                credential_public_key=self._b64url_decode(
+                    matched_passkey["public_key"]
+                ),
+                credential_current_sign_count=int(matched_passkey.get("sign_count", 0)),
+                require_user_verification=settings.webauthn_require_user_verification,
+            )
+        except Exception as exc:
+            raise HTTPException(
+                status_code=401, detail=f"Passkey authentication failed: {exc}"
+            ) from exc
+
+        timestamp = now_utc()
+        passkeys[index] = {
+            **matched_passkey,
+            "sign_count": int(verification.new_sign_count),
+            "last_used_at": timestamp,
+        }
+        updated = await self.repository.update_by_object_id(
+            user["_id"],
+            {
+                "passkeys": passkeys,
+                "passkey_authentication_challenge": None,
+                "passkey_authentication_started_at": None,
+                "updated_at": timestamp,
+            },
+        )
+        if not updated:
+            raise HTTPException(status_code=404, detail="User not found")
+        return updated
 
     async def ensure_username_and_email_unique(self, username: str, email: str) -> None:
         if await self.repository.find_by_username(username, active_only=True):

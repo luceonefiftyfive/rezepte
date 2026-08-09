@@ -23,6 +23,12 @@ Common Docker and deployment commands are documented here:
 
 [Docker commands](docs/docker-commands.md)
 
+### Passkey authentication
+
+Passkey (WebAuthn) setup and API usage are documented here:
+
+[Passkey Authentication](docs/passkey-authentication.md)
+
 ### Formatting in the repository
 
 Set up automatic formatting for the whole repository to ensure a consistent code style across all file types.

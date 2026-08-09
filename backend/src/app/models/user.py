@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import Optional
+from typing import Any
 
 from pydantic import BaseModel, EmailStr, Field
 
@@ -38,9 +38,9 @@ class UserPublic(BaseModel):
 
 
 class OwnProfileUpdate(BaseModel):
-    first_name: Optional[str] = Field(default=None, min_length=1)
-    last_name: Optional[str] = Field(default=None, min_length=1)
-    email: Optional[EmailStr] = None
+    first_name: str | None = Field(default=None, min_length=1)
+    last_name: str | None = Field(default=None, min_length=1)
+    email: EmailStr | None = None
 
 
 class GroupsUpdate(BaseModel):
@@ -54,6 +54,24 @@ class SuperAdminUpdate(BaseModel):
 class LoginRequest(BaseModel):
     username: str
     password: str
+
+
+class PasskeyRegistrationVerifyRequest(BaseModel):
+    credential: dict[str, Any]
+    credential_name: str | None = Field(default=None, max_length=120)
+
+
+class PasskeyAuthenticationOptionsRequest(BaseModel):
+    username: str = Field(min_length=1)
+
+
+class PasskeyAuthenticationVerifyRequest(BaseModel):
+    username: str = Field(min_length=1)
+    credential: dict[str, Any]
+
+
+class PasskeyOptionsResponse(BaseModel):
+    options: dict[str, Any]
 
 
 class TokenResponse(BaseModel):

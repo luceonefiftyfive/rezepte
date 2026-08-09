@@ -1,3 +1,8 @@
+import type {
+  PublicKeyCredentialCreationOptionsJSON,
+  PublicKeyCredentialRequestOptionsJSON,
+} from '@simplewebauthn/browser';
+
 export type Role = 'admin' | 'author' | 'reader';
 export type GroupRole = { group_id: string; role: Role };
 export type UserPublic = {
@@ -12,6 +17,12 @@ export type UserPublic = {
   is_active: boolean;
 };
 export type TokenResponse = { access_token: string; token_type: string; user: UserPublic };
+export type PasskeyRegistrationOptionsResponse = {
+  options: PublicKeyCredentialCreationOptionsJSON;
+};
+export type PasskeyAuthenticationOptionsResponse = {
+  options: PublicKeyCredentialRequestOptionsJSON;
+};
 export type RootResponse = {
   service: string;
   status: string;

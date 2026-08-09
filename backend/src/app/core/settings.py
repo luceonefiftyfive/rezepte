@@ -29,6 +29,11 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 60
 
+    webauthn_rp_id: str = "localhost"
+    webauthn_rp_name: str = "UnbenetRezepte"
+    webauthn_origin: str = "http://localhost:5173"
+    webauthn_require_user_verification: bool = True
+
     superuser_username: str = "admin"
     superuser_password: str = "admin-password"
     superuser_email: EmailStr = "admin@example.com"
