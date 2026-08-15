@@ -1,5 +1,10 @@
 # Change log
 
+## fix(backend): make username login case-insensitive v0.4.4
+
+- Login now accepts usernames regardless of uppercase/lowercase spelling.
+- Added a regression test to cover login with mixed-case usernames.
+
 ## chore(frontend): add recipe print and PDF export v0.4.3
 
 - Added a `Drucken (Print) / PDF` action in recipe detail view to open the browser print dialog.

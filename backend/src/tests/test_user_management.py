@@ -46,6 +46,14 @@ async def test_login_and_me(client):
 
 
 @pytest.mark.anyio
+async def test_login_is_case_insensitive_for_username(client):
+    token = await login(client, username="ADMIN", password="admin-password")
+    response = await client.get("/auth/me", headers=auth_header(token))
+    assert response.status_code == 200
+    assert response.json()["username"] == "admin"
+
+
+@pytest.mark.anyio
 async def test_test_access_is_protected(client):
     response = await client.get("/test-access")
     assert response.status_code == 401
