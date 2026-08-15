@@ -1,3 +1,4 @@
+import re
 from typing import Any, Optional
 
 from app.repositories.base_repository import MongoRepository
@@ -37,7 +38,13 @@ class UserRepository(MongoRepository[UserDocument]):
     async def find_by_username(
         self, username: str, *, active_only: bool = False
     ) -> Optional[UserDocument]:
-        query: dict[str, Any] = {"username": username}
+        normalized = str(username).strip()
+        if not normalized:
+            return None
+
+        query: dict[str, Any] = {
+            "username": {"$regex": rf"^{re.escape(normalized)}$", "$options": "i"}
+        }
         if active_only:
             query["is_active"] = True
         return await self.find_one(query)
