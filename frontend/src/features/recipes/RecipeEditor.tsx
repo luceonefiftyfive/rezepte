@@ -1,4 +1,4 @@
-import { ChangeEvent, FormEvent, useEffect, useState } from 'react';
+import { ChangeEvent, FormEvent, useEffect, useRef, useState } from 'react';
 import type {
   Group,
   ImageUploadResponse,
@@ -215,6 +215,10 @@ function emptyPayload(): RecipePayload {
   };
 }
 
+function draftSnapshot(form: RecipePayload, tags: string, selectedGroups: string[]): string {
+  return JSON.stringify({ form, tags, selectedGroups: [...selectedGroups].sort() });
+}
+
 export function RecipeEditor({
   recipe,
   availableGroups,
@@ -252,11 +256,18 @@ export function RecipeEditor({
   const [validationError, setValidationError] = useState('');
   const [recipeImageUrl, setRecipeImageUrl] = useState<string | null>(null);
   const [stepImageUrls, setStepImageUrls] = useState<Record<string, string>>({});
+  const initialDraftRef = useRef('');
 
   useEffect(() => {
-    setForm(recipe ?? emptyPayload());
-    setTags(recipe?.tags.join(', ') ?? '');
-    setSelectedGroups(resolvedSingleGroupId ? [resolvedSingleGroupId] : (recipe?.group_ids ?? []));
+    const initialForm = recipe ?? emptyPayload();
+    const initialTags = recipe?.tags.join(', ') ?? '';
+    const initialGroups = resolvedSingleGroupId
+      ? [resolvedSingleGroupId]
+      : (recipe?.group_ids ?? []);
+    setForm(initialForm);
+    setTags(initialTags);
+    setSelectedGroups(initialGroups);
+    initialDraftRef.current = draftSnapshot(initialForm, initialTags, initialGroups);
     setIngredientMarkdown('');
     setInstructionMarkdown('');
     setIsGroupDialogOpen(false);
@@ -266,6 +277,8 @@ export function RecipeEditor({
     setRecipeImageUrl(null);
     setStepImageUrls({});
   }, [recipe, resolvedSingleGroupId]);
+
+  const hasChanges = draftSnapshot(form, tags, selectedGroups) !== initialDraftRef.current;
 
   useEffect(() => {
     if (resolvedSingleGroupId) {
@@ -458,6 +471,14 @@ export function RecipeEditor({
       <div className="section-heading compact">
         <h3>{recipe ? 'Rezept bearbeiten' : 'Neues Rezept'}</h3>
         <div className="button-row">
+          <button type="submit" disabled={busy || !form.title.trim() || !hasChanges}>
+            {busy ? 'Speichern …' : 'Speichern'}
+          </button>
+          {onCancel && (
+            <button type="button" className="button-secondary" onClick={onCancel}>
+              Abbrechen
+            </button>
+          )}
           <button
             type="button"
             className="button-secondary"
@@ -465,11 +486,6 @@ export function RecipeEditor({
           >
             Markdown importieren
           </button>
-          {recipe && onCancel && (
-            <button type="button" className="button-secondary" onClick={onCancel}>
-              Abbrechen
-            </button>
-          )}
         </div>
       </div>
 
@@ -946,9 +962,6 @@ export function RecipeEditor({
           onChange={(e) => setForm({ ...form, remarks: e.target.value })}
         />
       </label>
-      <button type="submit" disabled={busy || !form.title.trim()}>
-        {busy ? 'Speichern …' : recipe ? 'Änderungen speichern' : 'Rezept speichern'}
-      </button>
     </form>
   );
 }
