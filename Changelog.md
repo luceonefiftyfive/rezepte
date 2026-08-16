@@ -1,5 +1,11 @@
 # Change log
 
+## feat(frontend): add save and cancel actions to recipe editor header
+
+- Added `Speichern` and `Abbrechen` actions to the header of the recipe creation and editing form.
+- The save action remains disabled until the recipe draft has been changed.
+- Added frontend tests for the dirty-state behavior and refreshing the overview after an edit is saved.
+
 ## fix(backend): make username login case-insensitive v0.4.4
 
 - Login now accepts usernames regardless of uppercase/lowercase spelling.

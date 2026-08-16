@@ -247,7 +247,7 @@ describe('RecipeSection', () => {
     fireEvent.click(screen.getByRole('button', { name: /Rezept anzeigen Brot/i }));
     fireEvent.click(screen.getByRole('button', { name: 'Bearbeiten' }));
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Brot verbessert' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Änderungen speichern' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Speichern' }));
 
     await waitFor(() => expect(screen.getByText('Brot verbessert')).toBeInTheDocument());
 

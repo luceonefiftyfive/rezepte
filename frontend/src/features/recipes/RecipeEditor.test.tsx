@@ -39,6 +39,27 @@ describe('RecipeEditor', () => {
     await user.click(screen.getByRole('button', { name: 'Auswahl übernehmen' }));
   }
 
+  it('enables header save only after the draft changes', async () => {
+    const user = userEvent.setup();
+    const onCancel = vi.fn();
+    render(
+      <RecipeEditor
+        onSave={vi.fn().mockResolvedValue(undefined)}
+        onCancel={onCancel}
+        availableGroups={SINGLE_AVAILABLE_GROUP}
+      />,
+    );
+
+    const saveButton = screen.getByRole('button', { name: 'Speichern' });
+    expect(saveButton).toBeDisabled();
+
+    await user.type(screen.getByLabelText('Name'), 'Kartoffelsuppe');
+    expect(saveButton).toBeEnabled();
+
+    await user.click(screen.getByRole('button', { name: 'Abbrechen' }));
+    expect(onCancel).toHaveBeenCalledOnce();
+  });
+
   it('submits structured ingredients and instruction steps', async () => {
     const user = userEvent.setup();
     const onSave = vi.fn().mockResolvedValue(undefined);
@@ -65,7 +86,7 @@ describe('RecipeEditor', () => {
 
     await user.click(screen.getByRole('button', { name: 'Schritt hinzufügen' }));
     await user.type(screen.getByLabelText('Zubereitungsschritt 2'), 'Suppe pürieren.');
-    await user.click(screen.getByRole('button', { name: 'Rezept speichern' }));
+    await user.click(screen.getByRole('button', { name: 'Speichern' }));
 
     expect(onSave).toHaveBeenCalledOnce();
     const payload = onSave.mock.calls[0][0];
@@ -105,7 +126,7 @@ describe('RecipeEditor', () => {
     await user.type(screen.getByLabelText('Name'), 'Nudeln');
     await user.type(screen.getByLabelText('Zutat'), 'Pasta');
     await user.type(screen.getByLabelText('Zubereitungsschritt 1'), 'Kochen.');
-    await user.click(screen.getByRole('button', { name: 'Rezept speichern' }));
+    await user.click(screen.getByRole('button', { name: 'Speichern' }));
 
     expect(onSave).toHaveBeenCalledOnce();
     const payload = onSave.mock.calls[0][0];
@@ -120,7 +141,7 @@ describe('RecipeEditor', () => {
     await user.type(screen.getByLabelText('Name'), 'Nudeln');
     await user.type(screen.getByLabelText('Zutat'), 'Pasta');
     await user.type(screen.getByLabelText('Zubereitungsschritt 1'), 'Kochen.');
-    await user.click(screen.getByRole('button', { name: 'Rezept speichern' }));
+    await user.click(screen.getByRole('button', { name: 'Speichern' }));
 
     expect(onSave).not.toHaveBeenCalled();
     expect(screen.getByText('Bitte mindestens ein Rezeptbuch auswählen.')).toBeInTheDocument();
@@ -160,7 +181,7 @@ describe('RecipeEditor', () => {
     );
     await user.click(screen.getByRole('button', { name: 'Beides importieren' }));
 
-    await user.click(screen.getByRole('button', { name: 'Rezept speichern' }));
+    await user.click(screen.getByRole('button', { name: 'Speichern' }));
 
     expect(onSave).toHaveBeenCalledOnce();
     const payload = onSave.mock.calls[0][0];
@@ -202,7 +223,7 @@ describe('RecipeEditor', () => {
     );
     await user.click(screen.getByRole('button', { name: 'Nur Zutaten importieren' }));
     await user.type(screen.getByLabelText('Zubereitungsschritt 1'), 'Alles mischen.');
-    await user.click(screen.getByRole('button', { name: 'Rezept speichern' }));
+    await user.click(screen.getByRole('button', { name: 'Speichern' }));
 
     expect(onSave).toHaveBeenCalledOnce();
     const payload = onSave.mock.calls[0][0];
