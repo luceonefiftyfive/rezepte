@@ -21,7 +21,8 @@ The system should be containerized (Docker), run on a remote server, be easy to 
 
 Common Docker and deployment commands are documented here:
 
-[Docker commands](docs/docker-commands.md)
+- [Docker commands](docs/docker-commands.md)
+- [Docker commands to update certficate](docs/certificate-renewal.md)
 
 ### Formatting in the repository
 
