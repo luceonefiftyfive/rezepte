@@ -1,10 +1,9 @@
-from typing import Optional
 
 from app.core.settings import settings
-from fastapi import Request
+from litestar.datastructures import State
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
 
-mongo_client: Optional[AsyncIOMotorClient] = None
+mongo_client: AsyncIOMotorClient | None = None
 
 
 def get_mongo_client() -> AsyncIOMotorClient:
@@ -14,9 +13,8 @@ def get_mongo_client() -> AsyncIOMotorClient:
     return mongo_client
 
 
-def get_db(request: Request) -> AsyncIOMotorDatabase:
-    app_state = getattr(request.app, "state", None)
-    db = getattr(app_state, "db", None)
+def get_db(state: State) -> AsyncIOMotorDatabase:
+    db = getattr(state, "db", None)
     if db is not None:
         return db
 

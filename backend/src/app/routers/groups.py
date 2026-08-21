@@ -1,17 +1,14 @@
 import logging
-from typing import Annotated
 
-from app.core.database import get_db
 from app.models.group import GroupCreate, GroupOut, GroupUpdate
 from app.models.user import Role
-from app.routers.users import get_current_user, require_super_admin
+from app.routers.users import CurrentUser, Db
 from app.services.group_service import GroupService
-from fastapi import APIRouter, Depends, HTTPException
-from motor.motor_asyncio import AsyncIOMotorDatabase
+from litestar import Router, delete, get, post, put
+from litestar.exceptions import HTTPException
+from litestar.params import FromPath, FromQuery
 
 log = logging.getLogger(__name__)
-
-router = APIRouter(prefix="/groups", tags=["groups"])
 
 
 def _assigned_group_ids(current_user: dict) -> set[str]:
@@ -26,11 +23,11 @@ def _manageable_group_ids(current_user: dict) -> set[str]:
     }
 
 
-@router.get("", response_model=list[GroupOut])
+@get("")
 async def list_groups(
-    db: Annotated[AsyncIOMotorDatabase, Depends(get_db)],
-    current_user: Annotated[dict, Depends(get_current_user)],
-    manageable_only: bool = False,
+    db: Db,
+    current_user: CurrentUser,
+    manageable_only: FromQuery[bool] = False,
 ) -> list[GroupOut]:
     service = GroupService(db)
     if current_user.get("is_super_admin", False):
@@ -48,11 +45,11 @@ async def list_groups(
     return ret
 
 
-@router.get("/{group_id}", response_model=GroupOut)
+@get("/{group_id:str}")
 async def get_group(
-    group_id: str,
-    db: Annotated[AsyncIOMotorDatabase, Depends(get_db)],
-    current_user: Annotated[dict, Depends(get_current_user)],
+    group_id: FromPath[str],
+    db: Db,
+    current_user: CurrentUser,
 ) -> GroupOut:
     if not current_user.get(
         "is_super_admin", False
@@ -62,29 +59,41 @@ async def get_group(
     return await GroupService(db).get_group_or_404(group_id)
 
 
-@router.post("", response_model=GroupOut, status_code=201)
+@post("", status_code=201)
 async def create_group(
     data: GroupCreate,
-    db: Annotated[AsyncIOMotorDatabase, Depends(get_db)],
-    _: Annotated[dict, Depends(require_super_admin)],
+    db: Db,
+    super_admin_user: CurrentUser,
 ) -> GroupOut:
     return await GroupService(db).create_group(data)
 
 
-@router.put("/{group_id}", response_model=GroupOut)
+@put("/{group_id:str}")
 async def update_group(
-    group_id: str,
+    group_id: FromPath[str],
     data: GroupUpdate,
-    db: Annotated[AsyncIOMotorDatabase, Depends(get_db)],
-    _: Annotated[dict, Depends(require_super_admin)],
+    db: Db,
+    super_admin_user: CurrentUser,
 ) -> GroupOut:
     return await GroupService(db).update_group(group_id, data)
 
 
-@router.delete("/{group_id}")
+@delete("/{group_id:str}", status_code=200)
 async def delete_group(
-    group_id: str,
-    db: Annotated[AsyncIOMotorDatabase, Depends(get_db)],
-    _: Annotated[dict, Depends(require_super_admin)],
+    group_id: FromPath[str],
+    db: Db,
+    super_admin_user: CurrentUser,
 ) -> dict[str, int | str | bool]:
     return await GroupService(db).delete_group(group_id)
+
+
+router = Router(
+    path="/groups",
+    route_handlers=[
+        list_groups,
+        get_group,
+        create_group,
+        update_group,
+        delete_group,
+    ],
+)

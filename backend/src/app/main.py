@@ -8,7 +8,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 import boto3
-from app.core.database import get_mongo_client
+from app.core.database import get_db, get_mongo_client
 from app.core.settings import Settings
 from app.repositories.group_repository import GroupRepository
 from app.routers.groups import router as groups_router
@@ -22,8 +22,14 @@ from app.routers.users import router as users_router
 from app.services.user_service import UserService
 from botocore.client import Config
 from botocore.exceptions import BotoCoreError, ClientError
-from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
-from fastapi.middleware.cors import CORSMiddleware
+from litestar import Litestar, Request, Response, get, post
+from litestar.config.cors import CORSConfig
+from litestar.datastructures import UploadFile
+from litestar.di import NamedDependency, Provide
+from litestar.enums import RequestEncodingType
+from litestar.exceptions import HTTPException, ValidationException
+from litestar.params import Body
+from litestar.plugins.pydantic import PydanticPlugin
 from pymongo.errors import PyMongoError
 from yaml import YAMLError, safe_load
 
@@ -112,8 +118,7 @@ def create_s3_client():
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
-
+async def lifespan(app: Litestar):
     app.state.mongo_client = get_mongo_client()
     app.state.db = app.state.mongo_client[settings.mongodb_database]
     app.state.s3_client = create_s3_client()
@@ -127,39 +132,61 @@ async def lifespan(app: FastAPI):
     await app.state.mongo_client.close()
 
 
+def http_exception_handler(request: Request, exc: HTTPException) -> Response:
+    return Response(
+        content={"detail": exc.detail},
+        status_code=exc.status_code,
+        headers=exc.headers,
+    )
+
+
+def validation_exception_handler(
+    request: Request, exc: ValidationException
+) -> Response:
+    return Response(content={"detail": exc.detail}, status_code=422)
+
+
 settings = Settings()
 
-app = FastAPI(
-    title=settings.app_name,
-    lifespan=lifespan,
-)
-
-
-app.add_middleware(
-    CORSMiddleware,
+cors_config = CORSConfig(
     allow_origins=settings.cors_origins,
     allow_credentials=not settings.rezepte_test,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-app.include_router(users_router)
-app.include_router(recipes_router)
-app.include_router(groups_router)
+app = Litestar(
+    route_handlers=[users_router, recipes_router, groups_router],
+    lifespan=[lifespan],
+    cors_config=cors_config,
+    dependencies={
+        "db": Provide(get_db, sync_to_thread=False),
+        "current_user": Provide(get_current_user),
+        "admin_user": Provide(require_admin_or_super_admin, sync_to_thread=False),
+        "super_admin_user": Provide(require_super_admin, sync_to_thread=False),
+    },
+    exception_handlers={
+        HTTPException: http_exception_handler,
+        ValidationException: validation_exception_handler,
+    },
+    plugins=[
+        PydanticPlugin(prefer_alias=True),
+    ],
+)
 
 
-@app.get("/")
+@get("/")
 async def root() -> dict[str, ty.Any]:
     return {
         "service": settings.app_name,
         "status": "ok",
-        "message": "FastAPI backend is reachable.",
+        "message": "Litestar backend is reachable.",
         "python": "3.13",
         "package_manager": "uv",
     }
 
 
-@app.get("/health")
+@get("/health")
 async def health() -> dict[str, str]:
     return {
         "status": "ok",
@@ -168,7 +195,7 @@ async def health() -> dict[str, str]:
     }
 
 
-@app.get("/system/checks")
+@get("/system/checks")
 async def system_checks() -> dict[str, ty.Any]:
     checks: dict[str, ty.Any] = {
         "api": {"ok": True},
@@ -207,17 +234,20 @@ async def system_checks() -> dict[str, ty.Any]:
     return checks
 
 
-@app.get("/system/version")
+@get("/system/version")
 async def system_version() -> dict[str, str]:
     return get_system_version()
 
 
-@app.post("/images/test-upload")
-async def upload_test_image(file: UploadFile = File(...)) -> dict[str, ty.Any]:
-    if not file.content_type or not file.content_type.startswith("image/"):
+@post("/images/test-upload", status_code=200, request_max_body_size=30 * 1024 * 1024)
+async def upload_test_image(
+    request: Request,
+    data: ty.Annotated[UploadFile, Body(media_type=RequestEncodingType.MULTI_PART)],
+) -> dict[str, ty.Any]:
+    if not data.content_type or not data.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="Only image files are allowed")
 
-    content = await file.read()
+    content = await data.read()
 
     if len(content) == 0:
         raise HTTPException(status_code=400, detail="Uploaded file is empty")
@@ -225,16 +255,16 @@ async def upload_test_image(file: UploadFile = File(...)) -> dict[str, ty.Any]:
     if len(content) > 25 * 1024 * 1024:
         raise HTTPException(status_code=413, detail="Image is larger than 25 MB")
 
-    safe_filename = file.filename or "upload"
+    safe_filename = data.filename or "upload"
     object_key = f"test-uploads/{uuid.uuid4()}-{safe_filename}"
 
     try:
         await asyncio.to_thread(
-            app.state.s3_client.put_object,
+            request.app.state.s3_client.put_object,
             Bucket=settings.s3_bucket,
             Key=object_key,
             Body=content,
-            ContentType=file.content_type,
+            ContentType=data.content_type,
         )
 
     except (BotoCoreError, ClientError) as exc:
@@ -245,35 +275,43 @@ async def upload_test_image(file: UploadFile = File(...)) -> dict[str, ty.Any]:
         "bucket": settings.s3_bucket,
         "key": object_key,
         "size": len(content),
-        "content_type": file.content_type,
+        "content_type": data.content_type,
     }
 
 
-@app.get("/test-access")
-def test_access(
-    current_user: ty.Annotated[dict, Depends(get_current_user)],
-):
+app.register(root)
+app.register(health)
+app.register(system_checks)
+app.register(system_version)
+app.register(upload_test_image)
+
+
+@get("/test-access", sync_to_thread=False)
+def test_access(current_user: ty.Annotated[dict, NamedDependency[dict]]) -> dict:
     return {
         "message": "You are authenticated",
         "username": current_user["username"],
     }
 
 
-@app.get("/test-admin-access")
-def test_admin_access(
-    current_user: ty.Annotated[dict, Depends(require_admin_or_super_admin)],
-):
+@get("/test-admin-access", sync_to_thread=False)
+def test_admin_access(admin_user: ty.Annotated[dict, NamedDependency[dict]]) -> dict:
     return {
         "message": "You are admin or super-admin",
-        "username": current_user["username"],
+        "username": admin_user["username"],
     }
 
 
-@app.get("/test-super-admin-access")
+@get("/test-super-admin-access", sync_to_thread=False)
 def test_super_admin_access(
-    current_user: ty.Annotated[dict, Depends(require_super_admin)],
-):
+    super_admin_user: ty.Annotated[dict, NamedDependency[dict]],
+) -> dict:
     return {
         "message": "You are super-admin",
-        "username": current_user["username"],
+        "username": super_admin_user["username"],
     }
+
+
+app.register(test_access)
+app.register(test_admin_access)
+app.register(test_super_admin_access)

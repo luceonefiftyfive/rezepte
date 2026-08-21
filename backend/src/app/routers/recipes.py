@@ -1,6 +1,5 @@
-from typing import Annotated
+import typing as ty
 
-from app.core.database import get_db
 from app.core.settings import Settings
 from app.models.recipes import (
     RecipeCreate,
@@ -11,15 +10,19 @@ from app.models.recipes import (
     RecipeUpdate,
 )
 from app.models.user import Role
-from app.routers.users import get_current_user, require_admin_or_super_admin
+from app.routers.users import CurrentUser, Db
 from app.services.image_service import ImageService
 from app.services.recipe_service import RecipeListSort, RecipeService
-from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
-from fastapi.responses import Response
-from motor.motor_asyncio import AsyncIOMotorDatabase
+from litestar import Request, Response, Router, delete, get, post, put
+from litestar.datastructures import UploadFile
+from litestar.enums import RequestEncodingType
+from litestar.exceptions import HTTPException
+from litestar.params import Body, FromPath, FromQuery
+from litestar.status_codes import HTTP_201_CREATED
 
-router = APIRouter(prefix="/recipes", tags=["recipes"])
 settings = Settings()
+
+FileUpload = ty.Annotated[UploadFile, Body(media_type=RequestEncodingType.MULTI_PART)]
 
 
 def _assigned_group_ids(current_user: dict) -> set[str]:
@@ -43,10 +46,9 @@ def _parse_group_ids(value: str | None) -> set[str] | None:
     return parsed
 
 
-def _recipe_image_url(request: Request, key: str) -> str:
-    base_url = settings.app_base_url.rstrip("/")
+def _recipe_image_url(key: str) -> str:
     image_key = key.lstrip("/")
-    return f"{base_url}/api/recipes/images/{image_key}"
+    return f"/api/recipes/images/{image_key}"
 
 
 async def _read_recipe_import_payload(
@@ -73,12 +75,12 @@ async def _read_recipe_import_payload(
     return archive_content
 
 
-@router.get("", response_model=list[RecipeOut])
+@get("")
 async def list_recipes(
-    db: Annotated[AsyncIOMotorDatabase, Depends(get_db)],
-    current_user: Annotated[dict, Depends(get_current_user)],
-    group_ids: str | None = None,
-    sort: RecipeListSort = RecipeListSort.CREATED_DESC,
+    db: Db,
+    current_user: CurrentUser,
+    group_ids: FromQuery[str | None] = None,
+    sort: FromQuery[RecipeListSort] = RecipeListSort.CREATED_DESC,
 ) -> list[RecipeOut]:
     selected_group_ids = _parse_group_ids(group_ids)
     if current_user.get("is_super_admin", False):
@@ -105,12 +107,12 @@ async def list_recipes(
     )
 
 
-@router.get("/admin/export", response_model=None)
+@get("/admin/export")
 async def export_recipes(
-    db: Annotated[AsyncIOMotorDatabase, Depends(get_db)],
+    db: Db,
     request: Request,
-    _: Annotated[dict, Depends(require_admin_or_super_admin)],
-    group_id: str | None = None,
+    admin_user: CurrentUser,
+    group_id: FromQuery[str | None] = None,
 ) -> Response:
     service = RecipeService(db, request.app.state.s3_client, settings)
     exported = await service.export_recipes(group_id=group_id)
@@ -121,21 +123,21 @@ async def export_recipes(
     )
 
 
-@router.delete("/admin/purge")
+@delete("/admin/purge", status_code=200)
 async def purge_recipes(
-    db: Annotated[AsyncIOMotorDatabase, Depends(get_db)],
-    _: Annotated[dict, Depends(require_admin_or_super_admin)],
-    group_id: str | None = None,
+    db: Db,
+    admin_user: CurrentUser,
+    group_id: FromQuery[str | None] = None,
 ) -> dict[str, object]:
     deleted_count = await RecipeService(db).purge_recipes(group_id=group_id)
     return {"ok": True, "group_id": group_id, "deleted_count": deleted_count}
 
 
-@router.post("/admin/import/preview", response_model=RecipeImportPreviewResult)
+@post("/admin/import/preview", status_code=200)
 async def preview_import_recipes(
-    db: Annotated[AsyncIOMotorDatabase, Depends(get_db)],
+    db: Db,
     request: Request,
-    _: Annotated[dict, Depends(require_admin_or_super_admin)],
+    admin_user: CurrentUser,
 ) -> RecipeImportPreviewResult:
     try:
         archive_content = await _read_recipe_import_payload(request)
@@ -146,11 +148,11 @@ async def preview_import_recipes(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-@router.post("/admin/import", response_model=RecipeImportResult)
+@post("/admin/import", status_code=200)
 async def import_recipes(
-    db: Annotated[AsyncIOMotorDatabase, Depends(get_db)],
+    db: Db,
     request: Request,
-    _: Annotated[dict, Depends(require_admin_or_super_admin)],
+    admin_user: CurrentUser,
 ) -> RecipeImportResult:
     try:
         archive_content = await _read_recipe_import_payload(request)
@@ -161,11 +163,27 @@ async def import_recipes(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-@router.get("/{recipe_id}", response_model=RecipeOut)
+@get("/images/{key:path}", name="stream_recipe_image")
+async def stream_recipe_image(
+    key: FromPath[str],
+    request: Request,
+) -> Response:
+    downloaded = await ImageService(
+        request.app.state.s3_client,
+        settings,
+    ).download_image(key.lstrip("/"))
+
+    return Response(
+        content=downloaded.content,
+        media_type=downloaded.content_type,
+    )
+
+
+@get("/{recipe_id:str}")
 async def get_recipe(
-    recipe_id: str,
-    db: Annotated[AsyncIOMotorDatabase, Depends(get_db)],
-    current_user: Annotated[dict, Depends(get_current_user)],
+    recipe_id: FromPath[str],
+    db: Db,
+    current_user: CurrentUser,
 ) -> RecipeOut:
     recipe = await RecipeService(db).get_recipe(recipe_id)
     if recipe is None:
@@ -176,12 +194,13 @@ async def get_recipe(
     return recipe
 
 
-@router.post("", response_model=RecipeOut, status_code=status.HTTP_201_CREATED)
+@post("", status_code=HTTP_201_CREATED)
 async def create_recipe(
-    recipe: RecipeCreate,
-    db: Annotated[AsyncIOMotorDatabase, Depends(get_db)],
-    current_user: Annotated[dict, Depends(get_current_user)],
+    data: RecipeCreate,
+    db: Db,
+    current_user: CurrentUser,
 ) -> RecipeOut:
+    recipe = data
     if not recipe.group_ids:
         raise HTTPException(
             status_code=422, detail="A recipe must be assigned to at least one group"
@@ -200,13 +219,14 @@ async def create_recipe(
     return await RecipeService(db).create_recipe(recipe)
 
 
-@router.put("/{recipe_id}", response_model=RecipeOut)
+@put("/{recipe_id:str}")
 async def update_recipe(
-    recipe_id: str,
-    recipe: RecipeUpdate,
-    db: Annotated[AsyncIOMotorDatabase, Depends(get_db)],
-    current_user: Annotated[dict, Depends(get_current_user)],
+    recipe_id: FromPath[str],
+    data: RecipeUpdate,
+    db: Db,
+    current_user: CurrentUser,
 ) -> RecipeOut:
+    recipe = data
     service = RecipeService(db)
     existing = await service.get_recipe(recipe_id)
     if existing is None:
@@ -249,11 +269,11 @@ async def update_recipe(
     return updated
 
 
-@router.delete("/{recipe_id}")
+@delete("/{recipe_id:str}", status_code=200)
 async def delete_recipe(
-    recipe_id: str,
-    db: Annotated[AsyncIOMotorDatabase, Depends(get_db)],
-    current_user: Annotated[dict, Depends(get_current_user)],
+    recipe_id: FromPath[str],
+    db: Db,
+    current_user: CurrentUser,
 ) -> dict[str, object]:
     service = RecipeService(db)
     existing = await service.get_recipe(recipe_id)
@@ -274,13 +294,13 @@ async def delete_recipe(
     return {"ok": True, "deleted_id": recipe_id}
 
 
-@router.post("/{recipe_id}/images/upload")
+@post("/{recipe_id:str}/images/upload", status_code=200)
 async def upload_recipe_image(
-    recipe_id: str,
+    recipe_id: FromPath[str],
     request: Request,
-    db: Annotated[AsyncIOMotorDatabase, Depends(get_db)],
-    current_user: Annotated[dict, Depends(get_current_user)],
-    file: UploadFile = File(...),
+    db: Db,
+    current_user: CurrentUser,
+    data: FileUpload,
 ) -> dict[str, object]:
     recipe = await RecipeService(db).get_recipe(recipe_id)
     if recipe is None:
@@ -295,7 +315,7 @@ async def upload_recipe_image(
 
     image_service = ImageService(request.app.state.s3_client, settings)
     uploaded = await image_service.upload_image(
-        file=file,
+        file=data,
         key_prefix=f"recipes/{recipe_id}/cover",
     )
     return {
@@ -304,18 +324,18 @@ async def upload_recipe_image(
         "key": uploaded.key,
         "size": uploaded.size,
         "content_type": uploaded.content_type,
-        "view_url": _recipe_image_url(request, uploaded.key),
+        "view_url": _recipe_image_url(uploaded.key),
     }
 
 
-@router.post("/{recipe_id}/instructions/{step_id}/image/upload")
+@post("/{recipe_id:str}/instructions/{step_id:str}/image/upload", status_code=200)
 async def upload_instruction_image(
-    recipe_id: str,
-    step_id: str,
+    recipe_id: FromPath[str],
+    step_id: FromPath[str],
     request: Request,
-    db: Annotated[AsyncIOMotorDatabase, Depends(get_db)],
-    current_user: Annotated[dict, Depends(get_current_user)],
-    file: UploadFile = File(...),
+    db: Db,
+    current_user: CurrentUser,
+    data: FileUpload,
 ) -> dict[str, object]:
     recipe = await RecipeService(db).get_recipe(recipe_id)
     if recipe is None:
@@ -332,7 +352,7 @@ async def upload_instruction_image(
 
     image_service = ImageService(request.app.state.s3_client, settings)
     uploaded = await image_service.upload_image(
-        file=file,
+        file=data,
         key_prefix=f"recipes/{recipe_id}/steps/{step_id}",
     )
     return {
@@ -341,27 +361,16 @@ async def upload_instruction_image(
         "key": uploaded.key,
         "size": uploaded.size,
         "content_type": uploaded.content_type,
-        "view_url": _recipe_image_url(request, uploaded.key),
+        "view_url": _recipe_image_url(uploaded.key),
     }
 
 
-@router.get("/images/{key:path}", name="stream_recipe_image")
-async def stream_recipe_image(
-    key: str,
-    request: Request,
-) -> Response:
-    downloaded = await ImageService(
-        request.app.state.s3_client, settings
-    ).download_image(key)
-    return Response(content=downloaded.content, media_type=downloaded.content_type)
-
-
-@router.get("/{recipe_id}/image-url")
+@get("/{recipe_id:str}/image-url")
 async def get_recipe_image_url(
-    recipe_id: str,
+    recipe_id: FromPath[str],
     request: Request,
-    db: Annotated[AsyncIOMotorDatabase, Depends(get_db)],
-    current_user: Annotated[dict, Depends(get_current_user)],
+    db: Db,
+    current_user: CurrentUser,
 ) -> dict[str, object]:
     recipe = await RecipeService(db).get_recipe(recipe_id)
     if recipe is None:
@@ -372,7 +381,7 @@ async def get_recipe_image_url(
     if not recipe.recipe_image_key:
         raise HTTPException(status_code=404, detail="Recipe image not found")
 
-    view_url = _recipe_image_url(request, recipe.recipe_image_key)
+    view_url = _recipe_image_url(recipe.recipe_image_key)
     return {
         "ok": True,
         "key": recipe.recipe_image_key,
@@ -380,13 +389,13 @@ async def get_recipe_image_url(
     }
 
 
-@router.get("/{recipe_id}/instructions/{step_id}/image-url")
+@get("/{recipe_id:str}/instructions/{step_id:str}/image-url")
 async def get_instruction_image_url(
-    recipe_id: str,
-    step_id: str,
+    recipe_id: FromPath[str],
+    step_id: FromPath[str],
     request: Request,
-    db: Annotated[AsyncIOMotorDatabase, Depends(get_db)],
-    current_user: Annotated[dict, Depends(get_current_user)],
+    db: Db,
+    current_user: CurrentUser,
 ) -> dict[str, object]:
     recipe = await RecipeService(db).get_recipe(recipe_id)
     if recipe is None:
@@ -401,9 +410,30 @@ async def get_instruction_image_url(
     if not step.image_key:
         raise HTTPException(status_code=404, detail="Instruction image not found")
 
-    view_url = _recipe_image_url(request, step.image_key)
+    view_url = _recipe_image_url(step.image_key)
     return {
         "ok": True,
         "key": step.image_key,
         "view_url": view_url,
     }
+
+
+router = Router(
+    path="/recipes",
+    route_handlers=[
+        list_recipes,
+        export_recipes,
+        purge_recipes,
+        preview_import_recipes,
+        import_recipes,
+        stream_recipe_image,
+        get_recipe,
+        create_recipe,
+        update_recipe,
+        delete_recipe,
+        upload_recipe_image,
+        upload_instruction_image,
+        get_recipe_image_url,
+        get_instruction_image_url,
+    ],
+)

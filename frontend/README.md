@@ -1,6 +1,6 @@
 # Familienrezepte – Frontend
 
-React-/Vite-Frontend für das aktuelle FastAPI-Backend.
+React-/Vite-Frontend für das aktuelle Litestar-Backend.
 
 ## Enthaltene Funktionen
 
@@ -44,7 +44,7 @@ VITE_API_BASE_URL=/api
 VITE_DEV_API_TARGET=http://localhost:8000
 ```
 
-In einer produktiven Umgebung sollte der Reverse Proxy `/api/*` an FastAPI weiterleiten.
+In einer produktiven Umgebung sollte der Reverse Proxy `/api/*` an Litestar weiterleiten.
 
 ## Recipe editor V2
 

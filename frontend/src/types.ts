@@ -114,7 +114,7 @@ export type SignedImageUrlResponse = {
   ok: boolean;
   key: string;
   view_url: string;
-  expires_in: number;
+  expires_in?: number;
 };
 
 export type Group = {
