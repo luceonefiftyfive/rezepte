@@ -57,7 +57,7 @@ async def test_root(client):
     assert response.json() == {
         "service": settings.app_name,
         "status": "ok",
-        "message": "FastAPI backend is reachable.",
+        "message": "Litestar backend is reachable.",
         "python": "3.13",
         "package_manager": "uv",
     }
@@ -572,8 +572,13 @@ async def test_image_upload_maps_s3_client_error_to_http_500(client):
 
 @pytest.mark.anyio
 async def test_recipe_scoped_image_upload_and_view_url(client):
+    def internal_path(view_url: str) -> str:
+        """Convert the public proxy URL into the Litestar-internal path."""
+        return urlsplit(view_url).path.removeprefix("/api")
+
     admin_token = await _login_token(client)
     headers = {"Authorization": f"Bearer {admin_token}"}
+
     create_payload = {
         "title": "Bildtest",
         "description": None,
@@ -584,68 +589,136 @@ async def test_recipe_scoped_image_upload_and_view_url(client):
             "cooking_minutes": 2,
             "resting_minutes": 3,
         },
-        "yield": {"amount": "2", "unit": "Portionen"},
+        "yield": {
+            "amount": "2",
+            "unit": "Portionen",
+        },
         "ingredient_sections": [],
-        "instructions": [{"id": "step-1", "text": "Teig kneten."}],
+        "instructions": [
+            {
+                "id": "step-1",
+                "text": "Teig kneten.",
+            }
+        ],
         "remarks": None,
     }
-    created = await client.post("/recipes", json=create_payload, headers=headers)
-    assert created.status_code == 201
-    recipe = created.json()
 
-    upload_cover = await client.post(
-        f"/recipes/{recipe['id']}/images/upload",
-        files={"file": ("cover.jpg", b"jpeg-content", "image/jpeg")},
+    # Rezept erstellen
+    created_response = await client.post(
+        "/recipes",
+        json=create_payload,
         headers=headers,
     )
-    assert upload_cover.status_code == 200
-    cover = upload_cover.json()
-    assert cover["key"].startswith(f"recipes/{recipe['id']}/cover/")
-    assert "view_url" in cover
-    assert cover["view_url"].startswith(f"{settings.app_base_url}/api/recipes/images/")
+    assert created_response.status_code == 201, created_response.text
+    recipe = created_response.json()
+    recipe_id = recipe["id"]
+
+    # Titelbild hochladen
+    upload_cover_response = await client.post(
+        f"/recipes/{recipe_id}/images/upload",
+        files={
+            "file": (
+                "cover.jpg",
+                b"cover-jpeg-content",
+                "image/jpeg",
+            )
+        },
+        headers=headers,
+    )
+    assert upload_cover_response.status_code == 200, upload_cover_response.text
+
+    cover = upload_cover_response.json()
+    expected_prefix = "/api/recipes/images/"
+
+    assert cover["key"].startswith(f"recipes/{recipe_id}/cover/")
+    assert cover["view_url"].startswith(expected_prefix)
     assert "minio:9000" not in cover["view_url"]
 
-    upload_step = await client.post(
-        f"/recipes/{recipe['id']}/instructions/step-1/image/upload",
-        files={"file": ("step.jpg", b"jpeg-content", "image/jpeg")},
+    # Bild für einen Arbeitsschritt hochladen
+    upload_step_response = await client.post(
+        f"/recipes/{recipe_id}" "/instructions/step-1/image/upload",
+        files={
+            "file": (
+                "step.jpg",
+                b"step-jpeg-content",
+                "image/jpeg",
+            )
+        },
         headers=headers,
     )
-    assert upload_step.status_code == 200
-    step = upload_step.json()
-    assert step["key"].startswith(f"recipes/{recipe['id']}/steps/step-1/")
-    assert "view_url" in step
-    assert step["view_url"].startswith(f"{settings.app_base_url}/api/recipes/images/")
+    assert upload_step_response.status_code == 200, upload_step_response.text
+
+    step = upload_step_response.json()
+
+    assert step["key"].startswith(f"recipes/{recipe_id}/steps/step-1/")
+    assert step["view_url"].startswith(expected_prefix)
     assert "minio:9000" not in step["view_url"]
 
-    update = await client.put(
-        f"/recipes/{recipe['id']}",
+    # Bild-Keys im Rezept speichern
+    update_response = await client.put(
+        f"/recipes/{recipe_id}",
         json={
             "recipe_image_key": cover["key"],
             "instructions": [
-                {"id": "step-1", "text": "Teig kneten.", "image_key": step["key"]}
+                {
+                    "id": "step-1",
+                    "text": "Teig kneten.",
+                    "image_key": step["key"],
+                }
             ],
             "version": recipe["version"],
         },
         headers=headers,
     )
-    assert update.status_code == 200
+    assert update_response.status_code == 200, update_response.text
 
-    cover_url = await client.get(f"/recipes/{recipe['id']}/image-url", headers=headers)
-    assert cover_url.status_code == 200
-    assert cover_url.json()["key"] == cover["key"]
-    assert cover_url.json()["view_url"] == cover["view_url"]
+    updated_recipe = update_response.json()
 
-    streamed_cover = await client.get(
-        urlsplit(cover["view_url"]).path.removeprefix("/api")
-    )
-    assert streamed_cover.status_code == 200
-    assert streamed_cover.headers["content-type"] == "image/jpeg"
-    assert streamed_cover.content == b"jpeg-content"
+    assert updated_recipe["recipe_image_key"] == cover["key"]
+    assert updated_recipe["instructions"][0]["image_key"] == step["key"]
 
-    step_url = await client.get(
-        f"/recipes/{recipe['id']}/instructions/step-1/image-url",
+    # Kontrollieren, dass die Keys wirklich gespeichert wurden
+    recipe_response = await client.get(
+        f"/recipes/{recipe_id}",
         headers=headers,
     )
-    assert step_url.status_code == 200
-    assert step_url.json()["key"] == step["key"]
-    assert step_url.json()["view_url"] == step["view_url"]
+    assert recipe_response.status_code == 200, recipe_response.text
+
+    stored_recipe = recipe_response.json()
+    assert stored_recipe["recipe_image_key"] == cover["key"]
+    assert stored_recipe["instructions"][0]["image_key"] == step["key"]
+
+    # URL des Titelbildes abfragen
+    cover_url_response = await client.get(
+        f"/recipes/{recipe_id}/image-url",
+        headers=headers,
+    )
+    assert cover_url_response.status_code == 200, cover_url_response.text
+
+    cover_url = cover_url_response.json()
+    assert cover_url["key"] == cover["key"]
+    assert cover_url["view_url"] == cover["view_url"]
+
+    # Titelbild intern über Litestar abrufen
+    print("cover view url:", cover["view_url"])
+    streamed_cover = await client.get(internal_path(cover["view_url"]))
+    assert streamed_cover.status_code == 200, streamed_cover.text
+    assert streamed_cover.headers["content-type"] == "image/jpeg"
+    assert streamed_cover.content == b"cover-jpeg-content"
+
+    # URL des Arbeitsschritt-Bildes abfragen
+    step_url_response = await client.get(
+        f"/recipes/{recipe_id}" "/instructions/step-1/image-url",
+        headers=headers,
+    )
+    assert step_url_response.status_code == 200, step_url_response.text
+
+    step_url = step_url_response.json()
+    assert step_url["key"] == step["key"]
+    assert step_url["view_url"] == step["view_url"]
+
+    # Arbeitsschritt-Bild intern über Litestar abrufen
+    streamed_step = await client.get(internal_path(step["view_url"]))
+    assert streamed_step.status_code == 200, streamed_step.text
+    assert streamed_step.headers["content-type"] == "image/jpeg"
+    assert streamed_step.content == b"step-jpeg-content"

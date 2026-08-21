@@ -3,7 +3,7 @@ from app.models.group import GroupCreate, GroupOut, GroupUpdate
 from app.repositories.group_repository import GroupRepository
 from app.repositories.recipe_repository import RecipeRepository
 from app.repositories.user_repository import UserRepository
-from fastapi import HTTPException
+from litestar.exceptions import HTTPException
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
 

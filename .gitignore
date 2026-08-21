@@ -239,3 +239,9 @@ frontend/package-lock.json
 # data
 mongodb-data/
 
+# temporary files
+uv.lock
+
+# ide
+.idea
+.vscode

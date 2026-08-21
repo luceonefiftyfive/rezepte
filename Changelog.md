@@ -1,5 +1,9 @@
 # Change log
 
+## feat(backend): litestar backend
+
+- Replace FastAPI thru litestar framework at backend,
+
 ## feat(frontend): add save and cancel actions to recipe editor header
 
 - Added `Speichern` and `Abbrechen` actions to the header of the recipe creation and editing form.

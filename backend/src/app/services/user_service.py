@@ -4,7 +4,7 @@ from app.core.security import hash_password, now_utc, verify_password
 from app.core.settings import settings
 from app.models.user import GroupRole, Role, UserCreate
 from app.repositories.user_repository import UserRepository
-from fastapi import HTTPException
+from litestar.exceptions import HTTPException
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
 log = logging.getLogger(__name__)

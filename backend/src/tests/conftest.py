@@ -1,5 +1,4 @@
 import pytest
-from app.core.database import get_db
 from app.core.security import hash_password, now_utc
 from app.main import app
 from httpx2 import ASGITransport, AsyncClient
@@ -55,8 +54,7 @@ async def db():
 
 @pytest.fixture()
 async def client(db):
-    app.dependency_overrides[get_db] = lambda: db
+    app.state.db = db
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as test_client:
         yield test_client
-    app.dependency_overrides.clear()

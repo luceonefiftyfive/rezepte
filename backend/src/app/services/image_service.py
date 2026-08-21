@@ -5,7 +5,8 @@ from dataclasses import dataclass
 
 from app.core.settings import Settings
 from botocore.exceptions import BotoCoreError, ClientError
-from fastapi import HTTPException, UploadFile
+from litestar.datastructures import UploadFile
+from litestar.exceptions import HTTPException
 
 
 @dataclass(frozen=True)
