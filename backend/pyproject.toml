@@ -20,12 +20,31 @@ dependencies = [
 
 [tool.uv]
 package = false
+
 [dependency-groups]
 dev = [
     "mongomock-motor>=0.0.36,<1",
     "pytest>=8.3,<10",
+    "pytest-cov>=7,<8",
 ]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["src/tests"]
+addopts = [
+    "--cov=src",
+    "--cov-report=term-missing",
+    "--cov-report=html",
+]
+
+[tool.coverage.run]
+branch = true
+omit = [
+    "src/tests/*",
+]
+
+[tool.coverage.report]
+show_missing = true
+
+[tool.coverage.html]
+directory = "htmlcov"

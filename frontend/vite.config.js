@@ -5,7 +5,27 @@ export default defineConfig(function (_a) {
     var env = loadEnv(mode, '.', '');
     return {
         plugins: [react()],
-        test: { environment: 'jsdom', setupFiles: './src/test-setup.ts', globals: true },
+        test: { 
+            environment: 'jsdom', 
+            setupFiles: './src/test-setup.ts',
+            coverage: {
+              provider: "v8",
+              reporter: [
+                "text",
+                "html",
+            ],
+
+            reportsDirectory: "coverage",
+
+            include: [
+                "src/**/*.{ts,tsx}",
+            ],
+            exclude: [
+                "src/**/*.d.ts",
+                "src/**/*.{test,spec}.{ts,tsx}",
+            ],
+            globals: true 
+        },
         server: {
             host: '0.0.0.0',
             port: 5173,

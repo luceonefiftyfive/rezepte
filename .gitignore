@@ -241,6 +241,7 @@ mongodb-data/
 
 # temporary files
 uv.lock
+coverage/
 
 # ide
 .idea
