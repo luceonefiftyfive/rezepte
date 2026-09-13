@@ -1,6 +1,14 @@
 # Change log
 
-## feat(backend): litestar backend
+## feat(frontend): select recipe books instead of free text v0.6.0
+
+- Replaced the free-text "Gruppen-ID" input in user management with a dropdown listing the available, not-yet-assigned
+  recipe books, both when creating a user and when adding a group role to an existing user.
+- The "Gruppe hinzufügen" button is now disabled once all recipe books are already assigned to the user.
+- Confirmed that renaming a recipe book already updates recipes and user management automatically, since both only
+  reference the immutable group ID and resolve the display name dynamically.
+
+## feat(backend): litestar backend v0.5.0
 
 - Replace FastAPI thru litestar framework at backend,
 
