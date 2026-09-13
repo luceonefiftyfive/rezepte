@@ -1,4 +1,5 @@
-import { ChangeEvent, FormEvent, useEffect, useRef, useState } from 'react';
+import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { TagPicker } from '../../components/TagPicker';
 import type {
   Group,
   ImageUploadResponse,
@@ -215,13 +216,18 @@ function emptyPayload(): RecipePayload {
   };
 }
 
-function draftSnapshot(form: RecipePayload, tags: string, selectedGroups: string[]): string {
-  return JSON.stringify({ form, tags, selectedGroups: [...selectedGroups].sort() });
+function draftSnapshot(form: RecipePayload, tags: string[], selectedGroups: string[]): string {
+  return JSON.stringify({
+    form,
+    tags: [...tags].sort(),
+    selectedGroups: [...selectedGroups].sort(),
+  });
 }
 
 export function RecipeEditor({
   recipe,
   availableGroups,
+  availableTags = [],
   forceSingleGroupId,
   busy = false,
   onSave,
@@ -231,6 +237,7 @@ export function RecipeEditor({
 }: {
   recipe?: Recipe | null;
   availableGroups: Group[];
+  availableTags?: string[];
   forceSingleGroupId?: string | null;
   busy?: boolean;
   onSave: (payload: RecipePayload, version?: number) => Promise<void>;
@@ -245,7 +252,7 @@ export function RecipeEditor({
   const resolvedSingleGroupId =
     forceSingleGroupId ?? (availableGroups.length === 1 ? availableGroups[0].id : null);
   const [form, setForm] = useState<RecipePayload>(() => recipe ?? emptyPayload());
-  const [tags, setTags] = useState(recipe?.tags.join(', ') ?? '');
+  const [selectedTags, setSelectedTags] = useState<string[]>(() => recipe?.tags ?? []);
   const [selectedGroups, setSelectedGroups] = useState<string[]>(recipe?.group_ids ?? []);
   const [ingredientMarkdown, setIngredientMarkdown] = useState('');
   const [instructionMarkdown, setInstructionMarkdown] = useState('');
@@ -260,12 +267,12 @@ export function RecipeEditor({
 
   useEffect(() => {
     const initialForm = recipe ?? emptyPayload();
-    const initialTags = recipe?.tags.join(', ') ?? '';
+    const initialTags = recipe?.tags ?? [];
     const initialGroups = resolvedSingleGroupId
       ? [resolvedSingleGroupId]
       : (recipe?.group_ids ?? []);
     setForm(initialForm);
-    setTags(initialTags);
+    setSelectedTags(initialTags);
     setSelectedGroups(initialGroups);
     initialDraftRef.current = draftSnapshot(initialForm, initialTags, initialGroups);
     setIngredientMarkdown('');
@@ -278,7 +285,7 @@ export function RecipeEditor({
     setStepImageUrls({});
   }, [recipe, resolvedSingleGroupId]);
 
-  const hasChanges = draftSnapshot(form, tags, selectedGroups) !== initialDraftRef.current;
+  const hasChanges = draftSnapshot(form, selectedTags, selectedGroups) !== initialDraftRef.current;
 
   useEffect(() => {
     if (resolvedSingleGroupId) {
@@ -436,10 +443,7 @@ export function RecipeEditor({
       description: form.description?.trim() || null,
       source: form.source?.trim() || null,
       remarks: form.remarks?.trim() || null,
-      tags: tags
-        .split(',')
-        .map((value) => value.trim())
-        .filter(Boolean),
+      tags: selectedTags,
       group_ids: groupIds,
       ingredient_sections: form.ingredient_sections.map((section) => ({
         ...section,
@@ -461,7 +465,7 @@ export function RecipeEditor({
     await onSave(payload, recipe?.version);
     if (!recipe) {
       setForm(emptyPayload());
-      setTags('');
+      setSelectedTags([]);
       setSelectedGroups(resolvedSingleGroupId ? [resolvedSingleGroupId] : []);
     }
   }
@@ -698,10 +702,11 @@ export function RecipeEditor({
             </div>
           )}
         </fieldset>
-        <label>
-          Schlagwörter <span className="label-help">mit Komma getrennt</span>
-          <input value={tags} onChange={(e) => setTags(e.target.value)} />
-        </label>
+        <TagPicker
+          selectedTags={selectedTags}
+          availableTags={availableTags}
+          onChange={setSelectedTags}
+        />
         <label>
           Portionen/Menge
           <input

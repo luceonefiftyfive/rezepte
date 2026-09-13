@@ -868,6 +868,7 @@ export function RecipeSection({
         <RecipeEditor
           recipe={editing}
           availableGroups={editorGroups}
+          availableTags={availableTags}
           forceSingleGroupId={editorGroups.length === 1 ? editorGroups[0].id : null}
           busy={busy}
           onSave={saveRecipe}

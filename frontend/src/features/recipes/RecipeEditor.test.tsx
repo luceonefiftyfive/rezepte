@@ -259,4 +259,51 @@ describe('RecipeEditor', () => {
       unit: 'as_needed',
     });
   });
+
+  it('supports selecting, adding, and deselecting tags via tag picker', async () => {
+    const user = userEvent.setup();
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    render(
+      <RecipeEditor
+        onSave={onSave}
+        availableGroups={SINGLE_AVAILABLE_GROUP}
+        availableTags={['Backen', 'Dessert', 'Suppe']}
+      />,
+    );
+
+    await user.type(screen.getByLabelText('Name'), 'Apfelkuchen');
+    await user.type(screen.getByLabelText('Zutat'), 'Äpfel');
+    await user.type(screen.getByLabelText('Zubereitungsschritt 1'), 'Backen.');
+
+    // Open tag picker dropdown
+    const tagInput = screen.getByLabelText('Schlagwort eingeben');
+    await user.click(tagInput);
+
+    // Select multiple tags from available tags in dropdown
+    await user.click(screen.getByLabelText('Backen'));
+    await user.click(screen.getByLabelText('Dessert'));
+
+    // Verify selected tag pills are displayed
+    expect(screen.getByRole('button', { name: 'Schlagwort Backen entfernen' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Schlagwort Dessert entfernen' }),
+    ).toBeInTheDocument();
+
+    // Add a new custom tag by typing and pressing Enter
+    await user.type(tagInput, 'Herbst{Enter}');
+
+    expect(screen.getByRole('button', { name: 'Schlagwort Herbst entfernen' })).toBeInTheDocument();
+
+    // Deselect a tag (Dessert) by clicking its remove button
+    await user.click(screen.getByRole('button', { name: 'Schlagwort Dessert entfernen' }));
+    expect(
+      screen.queryByRole('button', { name: 'Schlagwort Dessert entfernen' }),
+    ).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Speichern' }));
+
+    expect(onSave).toHaveBeenCalledOnce();
+    const payload = onSave.mock.calls[0][0];
+    expect(payload.tags).toEqual(['Backen', 'Herbst']);
+  });
 });
