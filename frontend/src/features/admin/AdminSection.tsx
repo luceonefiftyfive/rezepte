@@ -35,7 +35,7 @@ const EMPTY_NEW_USER: NewUserForm = {
   is_super_admin: false,
 };
 
-type AdminView = 'users' | 'import-export';
+type AdminView = 'users' | 'recipe-books' | 'import-export';
 
 type GroupForm = {
   id: string;
@@ -109,7 +109,10 @@ export function AdminSection() {
     if (!isAdmin && activeView === 'import-export') {
       setActiveView('users');
     }
-  }, [activeView, isAdmin]);
+    if (!currentUser?.is_super_admin && activeView === 'recipe-books') {
+      setActiveView('users');
+    }
+  }, [activeView, currentUser?.is_super_admin, isAdmin]);
 
   async function createUser(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
@@ -239,10 +242,25 @@ export function AdminSection() {
   }
 
   function addGroup(userId: string): void {
-    setGroupDrafts((current) => ({
-      ...current,
-      [userId]: [...(current[userId] ?? []), { group_id: '', role: 'reader' }],
-    }));
+    setGroupDrafts((current) => {
+      const existingIds = new Set((current[userId] ?? []).map((group) => group.group_id));
+      const nextAvailable = groups.find((group) => !existingIds.has(group.id));
+      return {
+        ...current,
+        [userId]: [
+          ...(current[userId] ?? []),
+          { group_id: nextAvailable?.id ?? '', role: 'reader' },
+        ],
+      };
+    });
+  }
+
+  function availableGroupsForRow(userId: string, index: number): Group[] {
+    const rows = groupDrafts[userId] ?? [];
+    const selectedElsewhere = new Set(
+      rows.filter((_, i) => i !== index).map((group) => group.group_id),
+    );
+    return groups.filter((group) => !selectedElsewhere.has(group.id));
   }
 
   function removeGroup(userId: string, index: number): void {
@@ -490,6 +508,17 @@ export function AdminSection() {
             >
               Benutzerverwaltung
             </button>
+            {currentUser?.is_super_admin && (
+              <button
+                type="button"
+                role="tab"
+                aria-selected={activeView === 'recipe-books'}
+                className={activeView === 'recipe-books' ? 'active' : ''}
+                onClick={() => setActiveView('recipe-books')}
+              >
+                Rezeptbücher
+              </button>
+            )}
             {isAdmin && (
               <button
                 type="button"
@@ -507,115 +536,111 @@ export function AdminSection() {
       {status && <div className="auth-status">{status}</div>}
       {error && <div className="auth-error">{error}</div>}
 
+      {activeView === 'recipe-books' && currentUser?.is_super_admin && (
+        <section className="card" aria-labelledby="group-management-heading">
+          <div className="section-heading compact">
+            <h3 id="group-management-heading">Rezeptbücher verwalten</h3>
+            <button type="button" onClick={() => void loadGroups()} disabled={busy}>
+              Rezeptbücher neu laden
+            </button>
+          </div>
+
+          <form onSubmit={createGroup} className="user-create-form">
+            <h4>Rezeptbuch anlegen</h4>
+            <div className="form-grid">
+              <label>
+                ID
+                <input
+                  value={newGroup.id}
+                  onChange={(e) => setNewGroup({ ...newGroup, id: e.target.value })}
+                  required
+                />
+              </label>
+              <label>
+                Name
+                <input
+                  value={newGroup.name}
+                  onChange={(e) => setNewGroup({ ...newGroup, name: e.target.value })}
+                  required
+                />
+              </label>
+              <label>
+                Beschreibung
+                <input
+                  value={newGroup.description}
+                  onChange={(e) => setNewGroup({ ...newGroup, description: e.target.value })}
+                />
+              </label>
+            </div>
+            <button type="submit" disabled={busy}>
+              Rezeptbuch anlegen
+            </button>
+          </form>
+
+          <div className="user-list">
+            {groups.map((group) => {
+              const draft = groupFormDrafts[group.id] ?? {
+                id: group.id,
+                name: group.name,
+                description: group.description ?? '',
+              };
+              return (
+                <article className="card user-card" key={group.id}>
+                  <h4>{group.id}</h4>
+                  <div className="form-grid">
+                    <label>
+                      Name
+                      <input
+                        value={draft.name}
+                        onChange={(event) =>
+                          setGroupFormDrafts((current) => ({
+                            ...current,
+                            [group.id]: {
+                              ...draft,
+                              name: event.target.value,
+                            },
+                          }))
+                        }
+                      />
+                    </label>
+                    <label>
+                      Beschreibung
+                      <input
+                        value={draft.description}
+                        onChange={(event) =>
+                          setGroupFormDrafts((current) => ({
+                            ...current,
+                            [group.id]: {
+                              ...draft,
+                              description: event.target.value,
+                            },
+                          }))
+                        }
+                      />
+                    </label>
+                  </div>
+                  <div className="button-row">
+                    <button type="button" onClick={() => void saveGroup(group.id)} disabled={busy}>
+                      Speichern
+                    </button>
+                    <button
+                      type="button"
+                      className="button-danger"
+                      onClick={() => void deleteGroup(group)}
+                      disabled={busy}
+                    >
+                      Löschen
+                    </button>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
       {activeView === 'users' && (
         <>
-          {currentUser?.is_super_admin && (
-            <section className="card" aria-labelledby="group-management-heading">
-              <div className="section-heading compact">
-                <h3 id="group-management-heading">Rezeptbücher verwalten</h3>
-                <button type="button" onClick={() => void loadGroups()} disabled={busy}>
-                  Rezeptbücher neu laden
-                </button>
-              </div>
-
-              <form onSubmit={createGroup} className="user-create-form">
-                <h4>Rezeptbuch anlegen</h4>
-                <div className="form-grid">
-                  <label>
-                    ID
-                    <input
-                      value={newGroup.id}
-                      onChange={(e) => setNewGroup({ ...newGroup, id: e.target.value })}
-                      required
-                    />
-                  </label>
-                  <label>
-                    Name
-                    <input
-                      value={newGroup.name}
-                      onChange={(e) => setNewGroup({ ...newGroup, name: e.target.value })}
-                      required
-                    />
-                  </label>
-                  <label>
-                    Beschreibung
-                    <input
-                      value={newGroup.description}
-                      onChange={(e) => setNewGroup({ ...newGroup, description: e.target.value })}
-                    />
-                  </label>
-                </div>
-                <button type="submit" disabled={busy}>
-                  Rezeptbuch anlegen
-                </button>
-              </form>
-
-              <div className="user-list">
-                {groups.map((group) => {
-                  const draft = groupFormDrafts[group.id] ?? {
-                    id: group.id,
-                    name: group.name,
-                    description: group.description ?? '',
-                  };
-                  return (
-                    <article className="card user-card" key={group.id}>
-                      <h4>{group.id}</h4>
-                      <div className="form-grid">
-                        <label>
-                          Name
-                          <input
-                            value={draft.name}
-                            onChange={(event) =>
-                              setGroupFormDrafts((current) => ({
-                                ...current,
-                                [group.id]: {
-                                  ...draft,
-                                  name: event.target.value,
-                                },
-                              }))
-                            }
-                          />
-                        </label>
-                        <label>
-                          Beschreibung
-                          <input
-                            value={draft.description}
-                            onChange={(event) =>
-                              setGroupFormDrafts((current) => ({
-                                ...current,
-                                [group.id]: {
-                                  ...draft,
-                                  description: event.target.value,
-                                },
-                              }))
-                            }
-                          />
-                        </label>
-                      </div>
-                      <div className="button-row">
-                        <button
-                          type="button"
-                          onClick={() => void saveGroup(group.id)}
-                          disabled={busy}
-                        >
-                          Speichern
-                        </button>
-                        <button
-                          type="button"
-                          className="button-danger"
-                          onClick={() => void deleteGroup(group)}
-                          disabled={busy}
-                        >
-                          Löschen
-                        </button>
-                      </div>
-                    </article>
-                  );
-                })}
-              </div>
-            </section>
-          )}
-
           <section className="card" aria-labelledby="user-management-heading">
             <div className="section-heading">
               <h3 id="user-management-heading">Benutzerverwaltung</h3>
@@ -671,11 +696,18 @@ export function AdminSection() {
                   />
                 </label>
                 <label>
-                  Gruppen-ID
-                  <input
+                  Rezeptbuch
+                  <select
                     value={newUser.group_id}
                     onChange={(e) => setNewUser({ ...newUser, group_id: e.target.value })}
-                  />
+                  >
+                    <option value="">Kein Rezeptbuch</option>
+                    {groups.map((group) => (
+                      <option key={group.id} value={group.id}>
+                        {group.name}
+                      </option>
+                    ))}
+                  </select>
                 </label>
                 <label>
                   Role
@@ -729,10 +761,17 @@ export function AdminSection() {
                   <strong>Gruppenrollen</strong>
                   {(groupDrafts[user.id] ?? []).map((group, index) => (
                     <div className="group-row" key={`${user.id}-${index}`}>
-                      <input
+                      <select
                         value={group.group_id}
                         onChange={(e) => updateGroup(user.id, index, { group_id: e.target.value })}
-                      />
+                      >
+                        <option value="">Rezeptbuch wählen</option>
+                        {availableGroupsForRow(user.id, index).map((availableGroup) => (
+                          <option key={availableGroup.id} value={availableGroup.id}>
+                            {availableGroup.name}
+                          </option>
+                        ))}
+                      </select>
                       <select
                         value={group.role}
                         onChange={(e) =>
@@ -756,6 +795,7 @@ export function AdminSection() {
                     <button
                       type="button"
                       className="button-secondary button-small"
+                      disabled={(groupDrafts[user.id] ?? []).length >= groups.length}
                       onClick={() => addGroup(user.id)}
                     >
                       Gruppe hinzufügen

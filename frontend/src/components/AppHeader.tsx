@@ -85,14 +85,6 @@ export function AppHeader({
                       Rezepte
                     </button>
                   )}
-                  <button
-                    type="button"
-                    role="menuitem"
-                    className={activeSection === 'general' ? 'active' : ''}
-                    onClick={() => selectSection('general')}
-                  >
-                    System
-                  </button>
                   {mayManageUsers && (
                     <button
                       type="button"
@@ -103,6 +95,14 @@ export function AppHeader({
                       Admin
                     </button>
                   )}
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className={activeSection === 'general' ? 'active' : ''}
+                    onClick={() => selectSection('general')}
+                  >
+                    System
+                  </button>
                   <div className="menu-version-box" role="presentation">
                     <div className="menu-version-label">Version</div>
                     <div className="menu-version-value">
