@@ -1,5 +1,11 @@
 # Change log
 
+## feat(frontend): interactive tag picker with multi-select and creation v0.7.0
+
+- Replaced free-text tag input in recipe editor with an interactive `TagPicker` combobox component.
+- Supports selecting existing tags via dropdown checkboxes, deselecting tags via badge close buttons, and creating new tags with Enter.
+- Rendered dropdown list directly underneath the tag input container.
+
 ## feat(frontend): select recipe books instead of free text v0.6.0
 
 - Replaced the free-text "Gruppen-ID" input in user management with a dropdown listing the available, not-yet-assigned
