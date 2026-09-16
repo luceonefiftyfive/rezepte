@@ -788,6 +788,12 @@ button:disabled {
 .recipe-content p {
   margin: 0;
 }
+.recipe-detail-title {
+  margin: 8px 0 16px;
+  font-size: clamp(32px, 4vw, 52px);
+  line-height: 1.1;
+  overflow-wrap: anywhere;
+}
 .image-upload-card input[type='file'] {
   border: 1px dashed #9ca3af;
   background: #f9fafb;
@@ -917,20 +923,6 @@ textarea {
   background: #ffffff;
   box-shadow: 0 24px 48px rgba(0, 0, 0, 0.2);
 }
-.recipe-group-selector {
-  display: grid;
-  gap: 8px;
-}
-.group-picker-list {
-  display: grid;
-  gap: 8px;
-  max-height: 280px;
-  overflow: auto;
-  padding: 10px;
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
-  background: #f9fafb;
-}
 .label-help {
   font-weight: 400;
   color: #6b7280;
@@ -1000,9 +992,9 @@ textarea {
   gap: 4px;
 }
 .tag-picker-label {
-  font-size: 13px;
-  font-weight: 500;
-  color: #689f38;
+  font-size: inherit;
+  font-weight: inherit;
+  color: inherit;
 }
 .tag-picker-input-container {
   position: relative;
@@ -1012,7 +1004,7 @@ textarea {
   min-height: 42px;
   padding: 4px 8px;
   background: #ffffff;
-  border: 1px solid #7cb342;
+  border: 1px solid #d1d5db;
   border-radius: 6px;
   cursor: text;
   transition:
@@ -1020,8 +1012,8 @@ textarea {
     box-shadow 0.15s ease;
 }
 .tag-picker-input-container--open {
-  border-color: #558b2f;
-  box-shadow: 0 0 0 2px rgba(104, 159, 56, 0.2);
+  border-color: #374151;
+  box-shadow: 0 0 0 2px rgba(55, 65, 81, 0.15);
 }
 .tag-picker-pills {
   display: flex;
@@ -1029,6 +1021,10 @@ textarea {
   align-items: center;
   gap: 6px;
   flex: 1;
+}
+.tag-picker-placeholder {
+  color: #9e9e9e;
+  font-size: 13px;
 }
 .tag-picker-pill {
   display: inline-flex;
@@ -1071,7 +1067,7 @@ textarea {
 .tag-picker-toggle-button {
   background: transparent;
   border: none;
-  color: #689f38;
+  color: #212121;
   font-size: 10px;
   cursor: pointer;
   padding: 4px;
@@ -1109,7 +1105,7 @@ textarea {
   width: 18px;
   height: 18px;
   cursor: pointer;
-  accent-color: #689f38;
+  accent-color: #424242;
 }
 .tag-picker-dropdown-create {
   padding: 10px 16px;

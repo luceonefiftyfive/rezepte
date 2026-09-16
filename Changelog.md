@@ -1,5 +1,13 @@
 # Change log
 
+## feat(frontend): inline recipe-book picker and larger recipe title v0.7.1
+
+- Replaced the recipe-book selection dialog in the recipe editor with an inline multi-select picker,
+  matching the tag picker; at least one recipe book remains required.
+- Moved recipe-book and tag guidance to hover tooltips and aligned their neutral typography and form
+  styling with the remaining editor fields.
+- Recipe titles in the read-only detail view are now displayed as larger, responsive headings.
+
 ## feat(frontend): interactive tag picker with multi-select and creation v0.7.0
 
 - Replaced free-text tag input in recipe editor with an interactive `TagPicker` combobox component.

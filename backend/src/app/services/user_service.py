@@ -132,6 +132,35 @@ class UserService:
         update["updated_at"] = now_utc()
         return await self.repository.update_by_object_id(current_user["_id"], update)
 
+    async def update_default_group(
+        self, user_id: str, group_id: str, current_user: dict
+    ) -> dict:
+        target = await self.get_user_or_404(user_id)
+        target_group = next(
+            (
+                group
+                for group in target.get("groups", [])
+                if group["group_id"] == group_id
+            ),
+            None,
+        )
+        if not current_user.get("is_super_admin", False) and (
+            target_group is None
+            or target_group["role"] not in {Role.admin.value, Role.author.value}
+        ):
+            raise HTTPException(
+                status_code=403,
+                detail="The default recipe book must be assigned with author or admin rights",
+            )
+        self.assert_may_manage_groups(
+            current_user,
+            [GroupRole(group_id=group_id, role=Role.admin)],
+        )
+        return await self.repository.update_by_object_id(
+            target["_id"],
+            {"default_group_id": group_id, "updated_at": now_utc()},
+        )
+
     async def update_user_groups(
         self, user_id: str, groups: list[GroupRole], current_user: dict
     ) -> dict:

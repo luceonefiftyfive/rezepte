@@ -78,8 +78,11 @@ export function TagPicker({ selectedTags, availableTags, onChange }: TagPickerPr
 
   return (
     <div className="tag-picker" ref={containerRef}>
-      <label className="tag-picker-label">
-        Wähle Tags aus oder erstelle Neue (mit Enter bestätigen)
+      <label
+        className="tag-picker-label"
+        title="Tags auswählen oder neue Tags eingeben und mit Enter bestätigen."
+      >
+        Tags
       </label>
       <div
         className={`tag-picker-input-container ${isOpen ? 'tag-picker-input-container--open' : ''}`}

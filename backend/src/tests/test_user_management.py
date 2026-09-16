@@ -106,6 +106,41 @@ async def test_update_own_profile(client):
 
 
 @pytest.mark.anyio
+async def test_update_own_default_recipe_book(client):
+    token = await login(client)
+    response = await client.patch(
+        "/users/me/default-recipe-book",
+        headers=auth_header(token),
+        json={"group_id": "recipes"},
+    )
+    assert response.status_code == 200
+    assert response.json()["default_group_id"] == "recipes"
+
+    me_response = await client.get("/auth/me", headers=auth_header(token))
+    assert me_response.json()["default_group_id"] == "recipes"
+
+
+@pytest.mark.anyio
+async def test_admin_can_update_existing_users_default_recipe_book(client):
+    token = await login(client)
+    user = await create_normal_user(client, token)
+    groups_response = await client.patch(
+        f"/users/{user['id']}/groups",
+        headers=auth_header(token),
+        json={"groups": [{"group_id": "recipes", "role": "author"}]},
+    )
+    assert groups_response.status_code == 200
+
+    response = await client.patch(
+        f"/users/{user['id']}/default-recipe-book",
+        headers=auth_header(token),
+        json={"group_id": "recipes"},
+    )
+    assert response.status_code == 200
+    assert response.json()["default_group_id"] == "recipes"
+
+
+@pytest.mark.anyio
 async def test_update_user_groups(client):
     token = await login(client)
     user = await create_normal_user(client, token)

@@ -8,6 +8,7 @@ export type UserPublic = {
   email: string;
   email_verified: boolean;
   groups: GroupRole[];
+  default_group_id: string | null;
   is_super_admin: boolean;
   is_active: boolean;
 };

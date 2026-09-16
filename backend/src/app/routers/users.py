@@ -3,6 +3,7 @@ import typing as ty
 from app.core.security import create_access_token
 from app.core.settings import settings
 from app.models.user import (
+    DefaultGroupUpdate,
     GroupsUpdate,
     LoginRequest,
     OwnProfileUpdate,
@@ -136,6 +137,31 @@ async def update_own_profile(
     return user_to_public(updated)
 
 
+@patch("/users/me/default-recipe-book")
+async def update_own_default_recipe_book(
+    data: DefaultGroupUpdate,
+    db: Db,
+    current_user: CurrentUser,
+) -> UserPublic:
+    updated = await UserService(db).update_default_group(
+        str(current_user["_id"]), data.group_id, current_user
+    )
+    return user_to_public(updated)
+
+
+@patch("/users/{user_id:str}/default-recipe-book")
+async def update_user_default_recipe_book(
+    user_id: FromPath[str],
+    data: DefaultGroupUpdate,
+    db: Db,
+    admin_user: CurrentUser,
+) -> UserPublic:
+    updated = await UserService(db).update_default_group(
+        user_id, data.group_id, admin_user
+    )
+    return user_to_public(updated)
+
+
 @patch("/users/{user_id:str}/groups")
 async def update_user_groups(
     user_id: FromPath[str],
@@ -199,6 +225,8 @@ router = Router(
         list_users,
         get_user,
         update_own_profile,
+        update_own_default_recipe_book,
+        update_user_default_recipe_book,
         update_user_groups,
         update_super_admin_status,
         delete_user,
