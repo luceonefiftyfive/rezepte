@@ -386,7 +386,7 @@ describe('RecipeSection', () => {
 
     expect(
       screen.getByRole('button', {
-        name: /Rezeptbuecher auswählen \(0\)|Rezeptbücher auswählen \(0\)/i,
+        name: /Rezeptbücher-Menü öffnen/i,
       }),
     ).toBeInTheDocument();
     expect(screen.queryByText('Keine verfügbaren Rezeptbücher.')).not.toBeInTheDocument();

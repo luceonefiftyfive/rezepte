@@ -58,6 +58,7 @@ export function AdminSection() {
   const [groupFormDrafts, setGroupFormDrafts] = useState<Record<string, GroupForm>>({});
   const [activeView, setActiveView] = useState<AdminView>('users');
   const [groupDrafts, setGroupDrafts] = useState<Record<string, GroupRole[]>>({});
+  const [defaultGroupDrafts, setDefaultGroupDrafts] = useState<Record<string, string>>({});
   const [recipeGroupFilter, setRecipeGroupFilter] = useState('');
   const [recipeImportFormat] = useState<RecipeExportFormat>('zip');
   const [recipeImportFile, setRecipeImportFile] = useState<File | null>(null);
@@ -73,6 +74,9 @@ export function AdminSection() {
       const data = await apiFetch<UserPublic[]>('/users', {}, token);
       setUsers(data);
       setGroupDrafts(Object.fromEntries(data.map((user) => [user.id, user.groups])));
+      setDefaultGroupDrafts(
+        Object.fromEntries(data.map((user) => [user.id, user.default_group_id ?? ''])),
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unbekannter Fehler');
     }
@@ -298,6 +302,36 @@ export function AdminSection() {
     } finally {
       setBusy(false);
     }
+  }
+
+  async function saveDefaultGroup(user: UserPublic): Promise<void> {
+    const groupId = defaultGroupDrafts[user.id] ?? '';
+    if (!groupId || groupId === user.default_group_id) return;
+    setBusy(true);
+    setError('');
+    try {
+      await apiFetch<UserPublic>(
+        `/users/${user.id}/default-recipe-book`,
+        {
+          method: 'PATCH',
+          body: JSON.stringify({ group_id: groupId }),
+        },
+        token,
+      );
+      setStatus(`Standard-Rezeptbuch für ${user.username} wurde aktualisiert`);
+      await loadUsers();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unbekannter Fehler');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function discardDefaultGroup(user: UserPublic): void {
+    setDefaultGroupDrafts((current) => ({
+      ...current,
+      [user.id]: user.default_group_id ?? '',
+    }));
   }
 
   async function setSuperAdministrator(
@@ -807,6 +841,71 @@ export function AdminSection() {
                       onClick={() => void saveGroups(user)}
                     >
                       Gruppen speichern
+                    </button>
+                  </div>
+                  <label>
+                    Standard-Rezeptbuch für neue Rezepte
+                    <select
+                      aria-label={`Standard-Rezeptbuch für ${user.username}`}
+                      value={defaultGroupDrafts[user.id] ?? ''}
+                      disabled={busy || !user.is_active}
+                      onChange={(event) =>
+                        setDefaultGroupDrafts((current) => ({
+                          ...current,
+                          [user.id]: event.target.value,
+                        }))
+                      }
+                    >
+                      <option value="">Kein Standard-Rezeptbuch</option>
+                      {(user.is_super_admin
+                        ? groups
+                        : (groupDrafts[user.id] ?? [])
+                            .filter((group) => group.role === 'author' || group.role === 'admin')
+                            .map((group) => groups.find((item) => item.id === group.group_id))
+                            .filter((group): group is Group => Boolean(group))
+                      ).map((group) => (
+                        <option key={group.id} value={group.id}>
+                          {group.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <div className="button-row">
+                    <span
+                      className={
+                        (defaultGroupDrafts[user.id] ?? '') === (user.default_group_id ?? '')
+                          ? 'muted'
+                          : 'auth-status'
+                      }
+                      role="status"
+                    >
+                      {(defaultGroupDrafts[user.id] ?? '') === (user.default_group_id ?? '')
+                        ? 'Gespeichert'
+                        : 'Änderungen nicht gespeichert'}
+                    </span>
+                    <button
+                      type="button"
+                      className="button-small"
+                      disabled={
+                        busy ||
+                        !user.is_active ||
+                        !(defaultGroupDrafts[user.id] ?? '') ||
+                        (defaultGroupDrafts[user.id] ?? '') === (user.default_group_id ?? '')
+                      }
+                      onClick={() => void saveDefaultGroup(user)}
+                    >
+                      Speichern
+                    </button>
+                    <button
+                      type="button"
+                      className="button-secondary button-small"
+                      disabled={
+                        busy ||
+                        (defaultGroupDrafts[user.id] ?? '') === (user.default_group_id ?? '')
+                      }
+                      onClick={() => discardDefaultGroup(user)}
+                    >
+                      Verwerfen
                     </button>
                   </div>
                 </div>

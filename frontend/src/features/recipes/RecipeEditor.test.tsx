@@ -32,11 +32,8 @@ const SINGLE_AVAILABLE_GROUP = [
 
 describe('RecipeEditor', () => {
   async function selectGroup(user: ReturnType<typeof userEvent.setup>, groupName: string) {
-    await user.click(
-      screen.getByRole('button', { name: /Rezeptbuecher auswählen|Rezeptbücher auswählen/i }),
-    );
+    await user.click(screen.getByRole('button', { name: /Rezeptbücher-Menü öffnen/i }));
     await user.click(screen.getByLabelText(groupName));
-    await user.click(screen.getByRole('button', { name: 'Auswahl übernehmen' }));
   }
 
   it('enables header save only after the draft changes', async () => {
@@ -118,9 +115,7 @@ describe('RecipeEditor', () => {
 
     expect(screen.getByText('Rezepte')).toBeInTheDocument();
     expect(
-      screen.queryByRole('button', {
-        name: /Rezeptbuecher auswählen|Rezeptbücher auswählen/i,
-      }),
+      screen.queryByRole('button', { name: /Rezeptbücher-Menü öffnen/i }),
     ).not.toBeInTheDocument();
 
     await user.type(screen.getByLabelText('Name'), 'Nudeln');
@@ -131,6 +126,16 @@ describe('RecipeEditor', () => {
     expect(onSave).toHaveBeenCalledOnce();
     const payload = onSave.mock.calls[0][0];
     expect(payload.group_ids).toEqual(['recipes']);
+  });
+
+  it('preselects the default group for new recipes', async () => {
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    render(
+      <RecipeEditor onSave={onSave} defaultGroupId="family" availableGroups={AVAILABLE_GROUPS} />,
+    );
+
+    expect(screen.getByText('Familie')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Standard-Rezeptbuch')).not.toBeInTheDocument();
   });
 
   it('requires at least one selected group in multi-select mode', async () => {

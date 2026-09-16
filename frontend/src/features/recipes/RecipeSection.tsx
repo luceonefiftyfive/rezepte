@@ -123,7 +123,7 @@ export function RecipeSection({
   createRequestVersion = 0,
   overviewRequestVersion = 0,
 }: RecipeSectionProps) {
-  const { token, mayEditRecipes } = useAuth();
+  const { token, user, mayEditRecipes } = useAuth();
   const lastLoadedRecipeSelectionRef = useRef<string | null>(null);
   const [recipeIdFromUrl, setRecipeIdFromUrl] = useState<string | null>(() => getRecipeIdFromUrl());
   const [recipes, setRecipes] = useState<Recipe[]>([]);
@@ -741,7 +741,7 @@ export function RecipeSection({
 
           {selectedRecipe && (
             <>
-              <p className="muted print-hide">{selectedRecipe.title}</p>
+              <h1 className="recipe-detail-title print-hide">{selectedRecipe.title}</h1>
               <div className="button-row recipe-detail-actions print-hide">
                 <button
                   type="button"
@@ -869,6 +869,7 @@ export function RecipeSection({
           recipe={editing}
           availableGroups={editorGroups}
           availableTags={availableTags}
+          defaultGroupId={user?.default_group_id ?? editorGroups[0]?.id ?? null}
           forceSingleGroupId={editorGroups.length === 1 ? editorGroups[0].id : null}
           busy={busy}
           onSave={saveRecipe}

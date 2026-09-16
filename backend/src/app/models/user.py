@@ -1,5 +1,4 @@
 from enum import Enum
-from typing import Optional
 
 from pydantic import BaseModel, EmailStr, Field
 
@@ -33,14 +32,19 @@ class UserPublic(BaseModel):
     email: EmailStr
     email_verified: bool
     groups: list[GroupRole]
+    default_group_id: str | None = None
     is_super_admin: bool
     is_active: bool
 
 
 class OwnProfileUpdate(BaseModel):
-    first_name: Optional[str] = Field(default=None, min_length=1)
-    last_name: Optional[str] = Field(default=None, min_length=1)
-    email: Optional[EmailStr] = None
+    first_name: str | None = Field(default=None, min_length=1)
+    last_name: str | None = Field(default=None, min_length=1)
+    email: EmailStr | None = None
+
+
+class DefaultGroupUpdate(BaseModel):
+    group_id: str = Field(min_length=1)
 
 
 class GroupsUpdate(BaseModel):
@@ -71,6 +75,7 @@ def user_to_public(user: dict) -> UserPublic:
         email=user["email"],
         email_verified=user.get("email_verified", False),
         groups=user.get("groups", []),
+        default_group_id=user.get("default_group_id"),
         is_super_admin=user.get("is_super_admin", False),
         is_active=user.get("is_active", True),
     )

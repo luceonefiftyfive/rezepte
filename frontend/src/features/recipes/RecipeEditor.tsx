@@ -1,5 +1,6 @@
 import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { TagPicker } from '../../components/TagPicker';
+import { GroupPicker } from '../../components/GroupPicker';
 import type {
   Group,
   ImageUploadResponse,
@@ -228,6 +229,7 @@ export function RecipeEditor({
   recipe,
   availableGroups,
   availableTags = [],
+  defaultGroupId,
   forceSingleGroupId,
   busy = false,
   onSave,
@@ -238,6 +240,7 @@ export function RecipeEditor({
   recipe?: Recipe | null;
   availableGroups: Group[];
   availableTags?: string[];
+  defaultGroupId?: string | null;
   forceSingleGroupId?: string | null;
   busy?: boolean;
   onSave: (payload: RecipePayload, version?: number) => Promise<void>;
@@ -257,7 +260,6 @@ export function RecipeEditor({
   const [ingredientMarkdown, setIngredientMarkdown] = useState('');
   const [instructionMarkdown, setInstructionMarkdown] = useState('');
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
-  const [isGroupDialogOpen, setIsGroupDialogOpen] = useState(false);
   const [uploadError, setUploadError] = useState('');
   const [uploadStatus, setUploadStatus] = useState('');
   const [validationError, setValidationError] = useState('');
@@ -270,14 +272,17 @@ export function RecipeEditor({
     const initialTags = recipe?.tags ?? [];
     const initialGroups = resolvedSingleGroupId
       ? [resolvedSingleGroupId]
-      : (recipe?.group_ids ?? []);
+      : recipe?.group_ids?.length
+        ? recipe.group_ids
+        : defaultGroupId && availableGroups.some((group) => group.id === defaultGroupId)
+          ? [defaultGroupId]
+          : [];
     setForm(initialForm);
     setSelectedTags(initialTags);
     setSelectedGroups(initialGroups);
     initialDraftRef.current = draftSnapshot(initialForm, initialTags, initialGroups);
     setIngredientMarkdown('');
     setInstructionMarkdown('');
-    setIsGroupDialogOpen(false);
     setUploadError('');
     setUploadStatus('');
     setValidationError('');
@@ -296,25 +301,6 @@ export function RecipeEditor({
       current.filter((groupId) => availableGroups.some((group) => group.id === groupId)),
     );
   }, [availableGroups, resolvedSingleGroupId]);
-
-  function toggleSelectedGroup(groupId: string) {
-    setSelectedGroups((current) => {
-      if (current.includes(groupId)) {
-        if (current.length === 1) {
-          setValidationError('Bitte mindestens ein Rezeptbuch auswählen.');
-          return current;
-        }
-        return current.filter((id) => id !== groupId);
-      }
-      setValidationError('');
-      return [...current, groupId];
-    });
-  }
-
-  function selectAllGroups() {
-    setSelectedGroups(availableGroups.map((group) => group.id));
-    setValidationError('');
-  }
 
   function updateSection(sectionIndex: number, section: IngredientSection) {
     setForm((current) => ({
@@ -558,48 +544,6 @@ export function RecipeEditor({
           </div>
         </div>
       )}
-      {isGroupDialogOpen && !resolvedSingleGroupId && availableGroups.length > 0 && (
-        <div className="import-dialog-backdrop" role="presentation">
-          <div
-            className="import-dialog"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="group-dialog-title"
-          >
-            <div className="section-heading compact">
-              <h4 id="group-dialog-title">Rezeptbücher auswählen</h4>
-              <button
-                type="button"
-                className="button-secondary"
-                onClick={() => setIsGroupDialogOpen(false)}
-              >
-                Schließen
-              </button>
-            </div>
-            <p className="muted">Mehrfachauswahl für Erstellung und Bearbeitung.</p>
-            <div className="button-row">
-              <button type="button" className="button-secondary" onClick={selectAllGroups}>
-                Alle auswählen
-              </button>
-            </div>
-            <div className="group-picker-list">
-              {availableGroups.map((group) => (
-                <label key={group.id} className="checkbox-label">
-                  <input
-                    type="checkbox"
-                    checked={selectedGroups.includes(group.id)}
-                    onChange={() => toggleSelectedGroup(group.id)}
-                  />
-                  {group.name}
-                </label>
-              ))}
-            </div>
-            <button type="button" onClick={() => setIsGroupDialogOpen(false)}>
-              Auswahl übernehmen
-            </button>
-          </div>
-        </div>
-      )}
       {uploadStatus && (
         <div className="auth-status" role="status">
           {uploadStatus}
@@ -665,49 +609,37 @@ export function RecipeEditor({
         )}
       </div>
       <div className="form-grid three">
-        <fieldset>
-          <legend>Rezeptbücher</legend>
-          {resolvedSingleGroupId &&
-          availableGroups.find((group) => group.id === resolvedSingleGroupId) ? (
+        {resolvedSingleGroupId &&
+        availableGroups.find((group) => group.id === resolvedSingleGroupId) ? (
+          <div className="tag-picker">
+            <label className="tag-picker-label" title="Mindestens ein Rezeptbuch ist erforderlich.">
+              Rezeptbücher
+            </label>
             <p className="muted">
               {availableGroups.find((group) => group.id === resolvedSingleGroupId)?.name}
             </p>
-          ) : availableGroups.length === 0 ? (
+          </div>
+        ) : availableGroups.length === 0 ? (
+          <div className="tag-picker">
+            <label className="tag-picker-label" title="Mindestens ein Rezeptbuch ist erforderlich.">
+              Rezeptbücher
+            </label>
             <p className="muted">Keine verfügbaren Rezeptbücher.</p>
-          ) : (
-            <div className="recipe-group-selector">
-              <button
-                type="button"
-                className="button-secondary"
-                onClick={() => setIsGroupDialogOpen(true)}
-              >
-                Rezeptbücher auswählen ({selectedGroups.length})
-              </button>
-              {selectedGroups.length === 0 ? (
-                <p className="muted">Keine Rezeptbücher ausgewählt.</p>
-              ) : (
-                <div className="badge-row">
-                  {availableGroups
-                    .filter((group) => selectedGroups.includes(group.id))
-                    .map((group) => (
-                      <span key={group.id} className="badge">
-                        {group.name}
-                      </span>
-                    ))}
-                </div>
-              )}
-              <span className="label-help">
-                Mehrfachauswahl über den Dialog. Mindestens ein Rezeptbuch ist erforderlich.
-              </span>
-            </div>
-          )}
-        </fieldset>
+          </div>
+        ) : (
+          <GroupPicker
+            selectedGroupIds={selectedGroups}
+            availableGroups={availableGroups}
+            onChange={setSelectedGroups}
+            onValidationError={setValidationError}
+          />
+        )}
         <TagPicker
           selectedTags={selectedTags}
           availableTags={availableTags}
           onChange={setSelectedTags}
         />
-        <label>
+        <label className="recipe-yield-label" title="Menge und Einheit des Rezepts.">
           Portionen/Menge
           <input
             aria-label="Menge"
