@@ -13,7 +13,8 @@ type AuthContextValue = {
   mayManageGroups: boolean;
   mayEditRecipes: boolean;
   login: (username: string, password: string) => Promise<void>;
-  logout: () => void;
+  logout: (notice?: string) => void;
+  authenticationNotice: string;
   refreshUser: () => Promise<void>;
 };
 
@@ -24,6 +25,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     typeof window === 'undefined' ? null : window.localStorage.getItem(TOKEN_KEY),
   );
   const [user, setUser] = useState<UserPublic | null>(null);
+  const [authenticationNotice, setAuthenticationNotice] = useState('');
 
   useEffect(() => {
     if (token) {
@@ -58,11 +60,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     setToken(response.access_token);
     setUser(response.user);
+    setAuthenticationNotice('');
   }
 
-  function logout(): void {
+  function logout(notice = ''): void {
     setToken(null);
     setUser(null);
+    setAuthenticationNotice(notice);
   }
 
   async function refreshUser(): Promise<void> {
@@ -89,9 +93,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       ),
       login,
       logout,
+      authenticationNotice,
       refreshUser,
     }),
-    [token, user],
+    [token, user, authenticationNotice],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

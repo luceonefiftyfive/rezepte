@@ -126,13 +126,15 @@ describe('RecipeSection', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Rezept anzeigen Brot/i }));
 
-    const detailSection = screen.getByRole('heading', { name: 'Rezept ansehen' }).closest('.card');
+    const detailSection = document.querySelector('.recipe-detail-title')?.closest('.card');
     expect(detailSection).toBeInTheDocument();
     expect(detailSection).toHaveTextContent('Einfach');
     expect(detailSection).toHaveTextContent('https://example.com/brot');
     expect(detailSection).toHaveTextContent('Mehl');
     expect(detailSection).toHaveTextContent('Teig kneten.');
     expect(detailSection).toHaveTextContent('Frisch servieren.');
+    expect(screen.queryByText('Rezeptbücher anzeigen')).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Rezept ansehen' })).not.toBeInTheDocument();
   });
 
   it('requests recipes again when the sort order changes', async () => {
@@ -442,8 +444,10 @@ describe('RecipeSection', () => {
     render(<RecipeSection />);
 
     await waitFor(() => {
-      expect(screen.getByRole('heading', { name: 'Rezept ansehen' })).toBeInTheDocument();
+      expect(document.querySelector('.recipe-detail-title')).toHaveTextContent('Brot');
       expect(screen.getByText('Einfach')).toBeInTheDocument();
+      expect(screen.queryByText('Rezeptbücher anzeigen')).not.toBeInTheDocument();
+      expect(screen.queryByRole('heading', { name: 'Rezept ansehen' })).not.toBeInTheDocument();
     });
   });
 

@@ -2,7 +2,7 @@ import { FormEvent, useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
 
 export function LoginPanel() {
-  const { login } = useAuth();
+  const { login, authenticationNotice } = useAuth();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -25,14 +25,45 @@ export function LoginPanel() {
   return (
     <section className="card auth-panel">
       <div className="auth-panel__header">
-        <div><p className="eyebrow">Geschützter Bereich</p><h2>Anmelden</h2></div>
+        <div>
+          <p className="eyebrow">Geschützter Bereich</p>
+          <h2>Anmelden</h2>
+        </div>
         <span className="auth-token">Nicht angemeldet</span>
       </div>
-      {error && <div className="auth-error" role="alert">{error}</div>}
+      {authenticationNotice && (
+        <div className="auth-status" role="status">
+          {authenticationNotice}
+        </div>
+      )}
+      {error && (
+        <div className="auth-error" role="alert">
+          {error}
+        </div>
+      )}
       <form onSubmit={handleSubmit} className="auth-form auth-form--login">
-        <label>Benutzername<input autoComplete="username" value={username} onChange={(event) => setUsername(event.target.value)} required /></label>
-        <label>Passwort<input autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} type="password" required /></label>
-        <button type="submit" disabled={busy}>{busy ? 'Anmeldung läuft …' : 'Anmelden'}</button>
+        <label>
+          Benutzername
+          <input
+            autoComplete="username"
+            value={username}
+            onChange={(event) => setUsername(event.target.value)}
+            required
+          />
+        </label>
+        <label>
+          Passwort
+          <input
+            autoComplete="current-password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            type="password"
+            required
+          />
+        </label>
+        <button type="submit" disabled={busy}>
+          {busy ? 'Anmeldung läuft …' : 'Anmelden'}
+        </button>
       </form>
     </section>
   );

@@ -7,6 +7,7 @@ import { GeneralSection } from './features/general/GeneralSection';
 import { RecipeSection } from './features/recipes/RecipeSection';
 
 type Section = 'general' | 'recipes' | 'admin';
+type AccountSettingsTarget = 'profile' | 'password';
 
 export default function App() {
   const { isAuthenticated, mayManageUsers } = useAuth();
@@ -14,6 +15,9 @@ export default function App() {
   const [recipeSearchQuery, setRecipeSearchQuery] = useState('');
   const [recipeCreateRequestVersion, setRecipeCreateRequestVersion] = useState(0);
   const [recipeOverviewRequestVersion, setRecipeOverviewRequestVersion] = useState(0);
+  const [accountSettingsTarget, setAccountSettingsTarget] =
+    useState<AccountSettingsTarget>('profile');
+  const [accountSettingsRequestVersion, setAccountSettingsRequestVersion] = useState(0);
   const wasAuthenticated = useRef(isAuthenticated);
 
   useEffect(() => {
@@ -54,8 +58,14 @@ export default function App() {
     setSection('recipes');
   }
 
+  function handleOpenAccountSettings(target: AccountSettingsTarget) {
+    setAccountSettingsTarget(target);
+    setAccountSettingsRequestVersion((current) => current + 1);
+    setSection('general');
+  }
+
   return (
-    <main className="page">
+    <div className="app-shell">
       <AppHeader
         activeSection={visibleSection}
         onSelectSection={handleSelectSection}
@@ -65,16 +75,27 @@ export default function App() {
         onRequestCreateRecipe={requestRecipeCreate}
       />
 
-      {!isAuthenticated && <LoginPanel />}
-      {visibleSection === 'general' && isAuthenticated && <GeneralSection />}
-      {visibleSection === 'recipes' && isAuthenticated && (
-        <RecipeSection
-          searchQuery={recipeSearchQuery}
-          createRequestVersion={recipeCreateRequestVersion}
-          overviewRequestVersion={recipeOverviewRequestVersion}
-        />
-      )}
-      {visibleSection === 'admin' && mayManageUsers && <AdminSection />}
-    </main>
+      <main className="page">
+        {!isAuthenticated && <LoginPanel />}
+        {visibleSection === 'general' && isAuthenticated && (
+          <GeneralSection
+            accountSettingsTarget={accountSettingsTarget}
+            accountSettingsRequestVersion={accountSettingsRequestVersion}
+            onOpenAccountSettings={handleOpenAccountSettings}
+          />
+        )}
+        {visibleSection === 'recipes' && isAuthenticated && (
+          <RecipeSection
+            searchQuery={recipeSearchQuery}
+            createRequestVersion={recipeCreateRequestVersion}
+            overviewRequestVersion={recipeOverviewRequestVersion}
+            onOpenAccountSettings={handleOpenAccountSettings}
+          />
+        )}
+        {visibleSection === 'admin' && mayManageUsers && (
+          <AdminSection onOpenAccountSettings={handleOpenAccountSettings} />
+        )}
+      </main>
+    </div>
   );
 }

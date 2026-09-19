@@ -15,6 +15,12 @@ The final product is supposed to be available as an web app, working on all kind
 
 The system should be containerized (Docker), run on a remote server, be easy to deploy, and get backuped regularly to a local server.
 
+## Account settings
+
+Authenticated users can manage their own first name, last name, and email address in the System section under "Mein Konto". The "Einstellungen" and "Passwort ändern" actions next to the user name open the relevant account form directly.
+
+Changing a password requires the current password and confirmation of the new password. After a successful password change, the user is signed out and must sign in again with the new password.
+
 ## Additional information
 
 ### Docker commands

@@ -43,6 +43,11 @@ class OwnProfileUpdate(BaseModel):
     email: EmailStr | None = None
 
 
+class OwnPasswordUpdate(BaseModel):
+    current_password: str = Field(min_length=1)
+    new_password: str = Field(min_length=8)
+
+
 class DefaultGroupUpdate(BaseModel):
     group_id: str = Field(min_length=1)
 
