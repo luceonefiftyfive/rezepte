@@ -1,5 +1,15 @@
 # Change log
 
+## feat(account): add self-service profile and password settings v0.8.0
+
+- Added self-service account settings for updating the first name, last name, email address, and password.
+- Password changes now invalidate existing sessions and require a new sign-in.
+- Combined the user name, role, account settings, password change, and sign-out action into a hover menu; the
+  password action opens and focuses the password form directly.
+- Replaced the recipe overview reload text button with an accessible icon button and hover tooltip.
+- Reworked the application header as a compact, full-width top bar with a responsive "Rezeptsammlung" title.
+- Removed recipe-book selection and list-only labels from the recipe detail view.
+
 ## feat(frontend): inline recipe-book picker and larger recipe title v0.7.1
 
 - Replaced the recipe-book selection dialog in the recipe editor with an inline multi-select picker,
@@ -11,7 +21,8 @@
 ## feat(frontend): interactive tag picker with multi-select and creation v0.7.0
 
 - Replaced free-text tag input in recipe editor with an interactive `TagPicker` combobox component.
-- Supports selecting existing tags via dropdown checkboxes, deselecting tags via badge close buttons, and creating new tags with Enter.
+- Supports selecting existing tags via dropdown checkboxes, deselecting tags via badge close buttons, and creating new
+  tags with Enter.
 - Rendered dropdown list directly underneath the tag input container.
 
 ## feat(frontend): select recipe books instead of free text v0.6.0

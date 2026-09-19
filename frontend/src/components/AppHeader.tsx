@@ -187,17 +187,15 @@ export function AppHeader({
                 loading="eager"
               />
             </button>
-            <div>
-              <h1>
-                <button
-                  type="button"
-                  className="hero-overview-link hero-overview-title"
-                  onClick={onGoToRecipeOverview}
-                >
-                  Rezeptesammlung
-                </button>
-              </h1>
-            </div>
+            <h1>
+              <button
+                type="button"
+                className="hero-overview-link hero-overview-title"
+                onClick={onGoToRecipeOverview}
+              >
+                Rezeptsammlung
+              </button>
+            </h1>
           </div>
         </div>
       </div>

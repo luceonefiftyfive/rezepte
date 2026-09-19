@@ -6,6 +6,7 @@ from app.models.user import (
     DefaultGroupUpdate,
     GroupsUpdate,
     LoginRequest,
+    OwnPasswordUpdate,
     OwnProfileUpdate,
     Role,
     SuperAdminUpdate,
@@ -53,6 +54,8 @@ async def get_current_user(request: Request, db: Db) -> dict:
     user = await service.get_user_or_404(user_id)
     if not user.get("is_active", True):
         raise HTTPException(status_code=403, detail="User is inactive")
+    if payload.get("auth_version", 0) != user.get("auth_version", 0):
+        raise credentials_error
     return user
 
 
@@ -79,7 +82,8 @@ async def login(data: LoginRequest, db: Db) -> TokenResponse:
     if not user:
         raise HTTPException(status_code=401, detail="Invalid username or password")
     return TokenResponse(
-        access_token=create_access_token(str(user["_id"])), user=user_to_public(user)
+        access_token=create_access_token(str(user["_id"]), user.get("auth_version", 0)),
+        user=user_to_public(user),
     )
 
 
@@ -135,6 +139,17 @@ async def update_own_profile(
         current_user, data.first_name, data.last_name, data.email
     )
     return user_to_public(updated)
+
+
+@patch("/users/me/password", status_code=204)
+async def update_own_password(
+    data: OwnPasswordUpdate,
+    db: Db,
+    current_user: CurrentUser,
+) -> None:
+    await UserService(db).update_own_password(
+        current_user, data.current_password, data.new_password
+    )
 
 
 @patch("/users/me/default-recipe-book")
@@ -225,6 +240,7 @@ router = Router(
         list_users,
         get_user,
         update_own_profile,
+        update_own_password,
         update_own_default_recipe_book,
         update_user_default_recipe_book,
         update_user_groups,
