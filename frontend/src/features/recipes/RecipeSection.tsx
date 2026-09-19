@@ -116,12 +116,14 @@ interface RecipeSectionProps {
   searchQuery?: string;
   createRequestVersion?: number;
   overviewRequestVersion?: number;
+  onOpenAccountSettings?: (target: 'profile' | 'password') => void;
 }
 
 export function RecipeSection({
   searchQuery = '',
   createRequestVersion = 0,
   overviewRequestVersion = 0,
+  onOpenAccountSettings = () => undefined,
 }: RecipeSectionProps) {
   const { token, user, mayEditRecipes } = useAuth();
   const lastLoadedRecipeSelectionRef = useRef<string | null>(null);
@@ -584,7 +586,7 @@ export function RecipeSection({
           <h2 id="recipes-heading">Rezepte</h2>
         </div>
         <div className="section-heading-actions">
-          <SectionUserInfo />
+          <SectionUserInfo onOpenAccountSettings={onOpenAccountSettings} />
           <button
             type="button"
             onClick={() =>
@@ -598,7 +600,7 @@ export function RecipeSection({
           </button>
         </div>
       </div>
-      {availableGroups.length > 1 && (
+      {!selectedRecipe && !isEditorOpen && availableGroups.length > 1 && (
         <div className="card">
           <div className="section-heading compact">
             <h3>Rezeptbücher anzeigen</h3>
@@ -626,7 +628,7 @@ export function RecipeSection({
           </div>
         </div>
       )}
-      {availableGroups.length === 1 && (
+      {!selectedRecipe && !isEditorOpen && availableGroups.length === 1 && (
         <p className="muted">Aktives Rezeptbuch: {availableGroups[0].name}</p>
       )}
       {status && (
@@ -642,12 +644,14 @@ export function RecipeSection({
       {!isEditorOpen && (
         <div className="card">
           <div className="section-heading compact">
-            <div>
-              <h3>{selectedRecipe ? 'Rezept ansehen' : 'Gespeicherte Rezepte'}</h3>
-              <p className="muted">
-                {visibleRecipes.length} von {recipes.length}
-              </p>
-            </div>
+            {!selectedRecipe && (
+              <div>
+                <h3>Gespeicherte Rezepte</h3>
+                <p className="muted">
+                  {visibleRecipes.length} von {recipes.length}
+                </p>
+              </div>
+            )}
             <div className="recipe-toolbar-actions">
               {!selectedRecipe && (
                 <label>

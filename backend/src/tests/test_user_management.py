@@ -106,6 +106,41 @@ async def test_update_own_profile(client):
 
 
 @pytest.mark.anyio
+async def test_update_own_password_invalidates_current_token(client):
+    token = await login(client)
+    response = await client.patch(
+        "/users/me/password",
+        headers=auth_header(token),
+        json={
+            "current_password": "admin-password",
+            "new_password": "new-admin-password",
+        },
+    )
+    assert response.status_code == 204
+
+    stale_token_response = await client.get("/auth/me", headers=auth_header(token))
+    assert stale_token_response.status_code == 401
+
+    new_token = await login(client, password="new-admin-password")
+    response = await client.get("/auth/me", headers=auth_header(new_token))
+    assert response.status_code == 200
+
+
+@pytest.mark.anyio
+async def test_update_own_password_rejects_incorrect_current_password(client):
+    token = await login(client)
+    response = await client.patch(
+        "/users/me/password",
+        headers=auth_header(token),
+        json={
+            "current_password": "incorrect-password",
+            "new_password": "new-admin-password",
+        },
+    )
+    assert response.status_code == 400
+
+
+@pytest.mark.anyio
 async def test_update_own_default_recipe_book(client):
     token = await login(client)
     response = await client.patch(

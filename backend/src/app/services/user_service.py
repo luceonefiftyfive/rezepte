@@ -47,6 +47,7 @@ class UserService:
             "email": str(data.email),
             "email_verified": False,
             "groups": [group.model_dump() for group in data.groups],
+            "auth_version": 0,
             "is_super_admin": data.is_super_admin,
             "is_active": True,
             "created_at": timestamp,
@@ -131,6 +132,21 @@ class UserService:
 
         update["updated_at"] = now_utc()
         return await self.repository.update_by_object_id(current_user["_id"], update)
+
+    async def update_own_password(
+        self, current_user: dict, current_password: str, new_password: str
+    ) -> None:
+        if not verify_password(current_password, current_user["password_hash"]):
+            raise HTTPException(status_code=400, detail="Current password is incorrect")
+
+        await self.repository.update_by_object_id(
+            current_user["_id"],
+            {
+                "password_hash": hash_password(new_password),
+                "auth_version": current_user.get("auth_version", 0) + 1,
+                "updated_at": now_utc(),
+            },
+        )
 
     async def update_default_group(
         self, user_id: str, group_id: str, current_user: dict

@@ -49,7 +49,11 @@ const EMPTY_GROUP: GroupForm = {
   description: '',
 };
 
-export function AdminSection() {
+interface AdminSectionProps {
+  onOpenAccountSettings: (target: 'profile' | 'password') => void;
+}
+
+export function AdminSection({ onOpenAccountSettings }: AdminSectionProps) {
   const { token, user: currentUser, refreshUser, isAdmin } = useAuth();
   const [users, setUsers] = useState<UserPublic[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
@@ -531,7 +535,7 @@ export function AdminSection() {
           <h2 id="admin-heading">Administration</h2>
         </div>
         <div className="section-heading-actions">
-          <SectionUserInfo />
+          <SectionUserInfo onOpenAccountSettings={onOpenAccountSettings} />
           <div className="admin-subnav" role="tablist" aria-label="Admin-Bereiche">
             <button
               type="button"

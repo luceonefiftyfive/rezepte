@@ -36,9 +36,9 @@ def now_utc() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def create_access_token(subject: str) -> str:
+def create_access_token(subject: str, auth_version: int = 0) -> str:
     expires_at = now_utc() + timedelta(minutes=settings.access_token_expire_minutes)
-    payload = {"sub": subject, "exp": expires_at}
+    payload = {"sub": subject, "auth_version": auth_version, "exp": expires_at}
     return jwt.encode(
         payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm
     )
