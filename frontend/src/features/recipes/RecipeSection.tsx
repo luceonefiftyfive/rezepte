@@ -589,14 +589,17 @@ export function RecipeSection({
           <SectionUserInfo onOpenAccountSettings={onOpenAccountSettings} />
           <button
             type="button"
+            className="icon-button"
             onClick={() =>
               void loadRecipes(selectedViewGroupIds, availableGroups, recipeSort, {
                 force: true,
               })
             }
             disabled={busy}
+            aria-label="Rezepte neu laden"
+            data-tooltip="Neu laden"
           >
-            Neu laden
+            <span aria-hidden="true">&#x21bb;</span>
           </button>
         </div>
       </div>

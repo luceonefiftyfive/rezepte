@@ -4,8 +4,9 @@
 
 - Added self-service account settings for updating the first name, last name, email address, and password.
 - Password changes now invalidate existing sessions and require a new sign-in.
-- Added "Einstellungen" and "Passwort ändern" actions next to the user name; the password action opens and focuses the
-  password form directly.
+- Combined the user name, role, account settings, password change, and sign-out action into a hover menu; the
+  password action opens and focuses the password form directly.
+- Replaced the recipe overview reload text button with an accessible icon button and hover tooltip.
 - Reworked the application header as a compact, full-width top bar with a responsive "Rezeptsammlung" title.
 - Removed recipe-book selection and list-only labels from the recipe detail view.
 

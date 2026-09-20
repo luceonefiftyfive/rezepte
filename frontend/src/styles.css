@@ -221,41 +221,85 @@ body {
 }
 
 .section-user {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
   margin-bottom: 0;
   margin-left: auto;
   flex-shrink: 0;
   font-size: 13px;
-  min-width: 240px;
 }
 
-.section-user > div {
+.section-user-button {
+  display: grid;
+  gap: 1px;
+  min-width: 148px;
+  padding: 7px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: #f9fafb;
+  color: #1f2937;
   text-align: right;
   font-size: 12px;
   white-space: nowrap;
 }
 
-.section-user strong {
-  display: block;
-  font-size: 13px;
+.section-user-button:hover,
+.section-user-button[aria-expanded='true'] {
+  background: #e5e7eb;
 }
 
-.section-user .muted {
+.section-user-button > span:first-child {
+  display: block;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.section-user-button .muted {
   font-size: 11px;
 }
 
-.section-user .auth-token {
+.section-user-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 10;
+  display: grid;
+  min-width: 180px;
+  gap: 4px;
+  padding: 8px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 14px 28px rgba(0, 0, 0, 0.12);
+}
+
+.section-user-menu .auth-token {
+  width: fit-content;
   padding: 4px 8px;
   font-size: 10px;
 }
 
-.section-user .button-secondary {
-  padding: 6px 12px;
+.section-user-menu button {
+  padding: 7px 10px;
+  border-radius: 6px;
+  background: transparent;
+  color: #374151;
+  text-align: left;
   font-size: 12px;
-  white-space: nowrap;
+}
+
+.section-user-menu button:hover,
+.section-user-menu button:focus-visible {
+  background: #111827;
+  color: #ffffff;
+}
+
+.section-user-menu .section-user-logout {
+  margin-top: 4px;
+  border-top: 1px solid #e5e7eb;
+  border-radius: 0 0 6px 6px;
+  color: #b91c1c;
 }
 
 .recipe-create-button,
@@ -277,6 +321,49 @@ body {
   justify-content: center;
   background: #ffffff;
   color: #111827;
+}
+
+.icon-button {
+  position: relative;
+  display: inline-flex;
+  width: 36px;
+  height: 36px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #111827;
+  font-size: 19px;
+  line-height: 1;
+}
+
+.icon-button[data-tooltip]::after {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 8px);
+  z-index: 20;
+  width: max-content;
+  max-width: 180px;
+  padding: 5px 8px;
+  border-radius: 4px;
+  background: #111827;
+  color: #ffffff;
+  content: attr(data-tooltip);
+  font-size: 12px;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(2px);
+  transition:
+    opacity 120ms ease,
+    transform 120ms ease;
+}
+
+.icon-button[data-tooltip]:hover::after,
+.icon-button[data-tooltip]:focus-visible::after {
+  opacity: 1;
+  transform: translateY(0);
 }
 
 .search-toggle:hover,
