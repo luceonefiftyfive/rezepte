@@ -93,6 +93,19 @@ export type Recipe = RecipePayload & {
   version: number;
 };
 export type RecipeListSort = 'created_desc' | 'title_asc';
+export type RecipeRating = {
+  score: number;
+  comment: string;
+  username: string;
+  created_at: string;
+  updated_at: string;
+};
+export type RecipeRatings = {
+  average_score: number | null;
+  rating_count: number;
+  own_rating: RecipeRating | null;
+  comments: RecipeRating[];
+};
 export type RecipeExportFormat = 'zip';
 export type RecipeImportResponse = { imported: number; created: number; updated: number };
 export type RecipeImportPreviewResponse = {

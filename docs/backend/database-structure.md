@@ -144,6 +144,38 @@ Used data base structure can be described in following json
           "type": "many-to-many (array reference)"
         }
       ]
+    },
+    {
+      "name": "recipe_ratings",
+      "documentShape": {
+        "_id": "ObjectId",
+        "recipe_id": "string (recipes.id)",
+        "user_id": "string (users._id)",
+        "username": "string",
+        "score": "int (1-5)",
+        "comment": "string (max 200 characters)",
+        "created_at": "datetime",
+        "updated_at": "datetime"
+      },
+      "indexes": [
+        {
+          "name": "recipe_id_1_user_id_1",
+          "keys": ["recipe_id", "user_id"],
+          "unique": true
+        }
+      ],
+      "relations": [
+        {
+          "field": "recipe_id",
+          "references": "recipes.id",
+          "type": "many-to-one"
+        },
+        {
+          "field": "user_id",
+          "references": "users._id",
+          "type": "many-to-one"
+        }
+      ]
     }
   ],
   "crossCollectionRules": [

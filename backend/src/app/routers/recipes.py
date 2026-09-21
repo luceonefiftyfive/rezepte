@@ -9,10 +9,12 @@ from app.models.recipes import (
     RecipeOut,
     RecipeUpdate,
 )
+from app.models.ratings import RecipeRatingInput, RecipeRatingOut, RecipeRatingsOut
 from app.models.user import Role
 from app.routers.users import CurrentUser, Db
 from app.services.image_service import ImageService
 from app.services.recipe_service import RecipeListSort, RecipeService
+from app.services.rating_service import RatingService
 from litestar import Request, Response, Router, delete, get, post, put
 from litestar.datastructures import UploadFile
 from litestar.enums import RequestEncodingType
@@ -179,11 +181,8 @@ async def stream_recipe_image(
     )
 
 
-@get("/{recipe_id:str}")
-async def get_recipe(
-    recipe_id: FromPath[str],
-    db: Db,
-    current_user: CurrentUser,
+async def _get_accessible_recipe(
+    recipe_id: str, db: Db, current_user: CurrentUser
 ) -> RecipeOut:
     recipe = await RecipeService(db).get_recipe(recipe_id)
     if recipe is None:
@@ -192,6 +191,39 @@ async def get_recipe(
         if not set(recipe.group_ids).intersection(_assigned_group_ids(current_user)):
             raise HTTPException(status_code=404, detail="Recipe not found")
     return recipe
+
+
+@get("/{recipe_id:str}/ratings")
+async def get_recipe_ratings(
+    recipe_id: FromPath[str], db: Db, current_user: CurrentUser
+) -> RecipeRatingsOut:
+    await _get_accessible_recipe(recipe_id, db, current_user)
+    return await RatingService(db).get_ratings(recipe_id, str(current_user["_id"]))
+
+
+@put("/{recipe_id:str}/rating")
+async def save_recipe_rating(
+    recipe_id: FromPath[str],
+    data: RecipeRatingInput,
+    db: Db,
+    current_user: CurrentUser,
+) -> RecipeRatingOut:
+    await _get_accessible_recipe(recipe_id, db, current_user)
+    return await RatingService(db).save_rating(
+        recipe_id=recipe_id,
+        user_id=str(current_user["_id"]),
+        username=current_user["username"],
+        rating=data,
+    )
+
+
+@get("/{recipe_id:str}")
+async def get_recipe(
+    recipe_id: FromPath[str],
+    db: Db,
+    current_user: CurrentUser,
+) -> RecipeOut:
+    return await _get_accessible_recipe(recipe_id, db, current_user)
 
 
 @post("", status_code=HTTP_201_CREATED)
@@ -427,6 +459,8 @@ router = Router(
         preview_import_recipes,
         import_recipes,
         stream_recipe_image,
+        get_recipe_ratings,
+        save_recipe_rating,
         get_recipe,
         create_recipe,
         update_recipe,

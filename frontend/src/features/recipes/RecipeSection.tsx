@@ -9,6 +9,8 @@ import type {
   RecipeListSort,
   Recipe,
   RecipePayload,
+  RecipeRating,
+  RecipeRatings,
   SignedImageUrlResponse,
   Unit,
 } from '../../types';
@@ -146,6 +148,10 @@ export function RecipeSection({
   const [recipeImageUrl, setRecipeImageUrl] = useState<string | null>(null);
   const [stepImageUrls, setStepImageUrls] = useState<Record<string, string>>({});
   const [printQrCodeDataUrl, setPrintQrCodeDataUrl] = useState<string | null>(null);
+  const [recipeRatings, setRecipeRatings] = useState<RecipeRatings | null>(null);
+  const [ratingScore, setRatingScore] = useState(0);
+  const [ratingComment, setRatingComment] = useState('');
+  const [ratingSaveState, setRatingSaveState] = useState<'idle' | 'saving' | 'saved'>('idle');
 
   const availableTags = useMemo(
     () => Array.from(new Set(recipes.flatMap((recipe) => recipe.tags))).sort(),
@@ -304,6 +310,7 @@ export function RecipeSection({
 
   function openRecipeDetail(recipe: Recipe) {
     setSelectedRecipe(recipe);
+    setRatingSaveState('idle');
     setRecipeIdFromUrl(recipe.id);
     setRecipeIdInUrl(recipe.id);
     setEditing(null);
@@ -359,6 +366,43 @@ export function RecipeSection({
       window.print();
     } catch {
       setError('Druckfunktion wird von diesem Browser nicht unterstuetzt.');
+    }
+  }
+
+  async function loadRecipeRatings(recipeId: string) {
+    const ratings = await apiFetch<RecipeRatings>(`/recipes/${recipeId}/ratings`, {}, token);
+    setRecipeRatings(ratings);
+    setRatingScore(ratings.own_rating?.score ?? 0);
+    setRatingComment(ratings.own_rating?.comment ?? '');
+  }
+
+  async function saveRecipeRating() {
+    if (!selectedRecipe || ratingScore < 1) {
+      setError('Bitte vergeben Sie zwischen 1 und 5 Sternen.');
+      return;
+    }
+
+    setRatingSaveState('saving');
+    setBusy(true);
+    setError('');
+    setStatus('');
+    try {
+      await apiFetch<RecipeRating>(
+        `/recipes/${selectedRecipe.id}/rating`,
+        {
+          method: 'PUT',
+          body: JSON.stringify({ score: ratingScore, comment: ratingComment }),
+        },
+        token,
+      );
+      await loadRecipeRatings(selectedRecipe.id);
+      setRatingSaveState('saved');
+      setStatus('Bewertung wurde gespeichert.');
+    } catch (err) {
+      setRatingSaveState('idle');
+      setError(err instanceof Error ? err.message : 'Unbekannter Fehler');
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -497,6 +541,26 @@ export function RecipeSection({
     }
     void refreshSelectedRecipeImageUrls(selectedRecipe);
   }, [recipePreviewImages, selectedRecipe, token]);
+
+  useEffect(() => {
+    if (!selectedRecipe || !user) {
+      setRecipeRatings(null);
+      setRatingScore(0);
+      setRatingComment('');
+      return;
+    }
+
+    let active = true;
+    void loadRecipeRatings(selectedRecipe.id).catch((err) => {
+      if (!active) return;
+      setRecipeRatings(null);
+      setError(err instanceof Error ? err.message : 'Unbekannter Fehler');
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [selectedRecipe, token, user]);
 
   useEffect(() => {
     if (!selectedRecipeShareUrl) {
@@ -865,6 +929,83 @@ export function RecipeSection({
                     <h4>Bemerkungen</h4>
                     <p>{selectedRecipe.remarks}</p>
                   </div>
+                )}
+                {user && (
+                  <section className="recipe-ratings print-hide" aria-labelledby="ratings-heading">
+                    <h4 id="ratings-heading">Bewertungen</h4>
+                    {recipeRatings ? (
+                      <p className="recipe-rating-summary">
+                        {recipeRatings.rating_count > 0
+                          ? `${recipeRatings.average_score?.toFixed(1)} von 5 Sternen aus ${recipeRatings.rating_count} Bewertung${recipeRatings.rating_count === 1 ? '' : 'en'}`
+                          : 'Noch keine Bewertungen'}
+                      </p>
+                    ) : (
+                      <p className="muted">Bewertungen werden geladen.</p>
+                    )}
+                    <div className="recipe-rating-form">
+                      <div className="recipe-star-picker" role="group" aria-label="Ihre Bewertung">
+                        {[1, 2, 3, 4, 5].map((score) => (
+                          <button
+                            key={score}
+                            type="button"
+                            className={
+                              score <= ratingScore
+                                ? 'recipe-star recipe-star--selected'
+                                : 'recipe-star'
+                            }
+                            aria-label={`${score} von 5 Sternen`}
+                            aria-pressed={score === ratingScore}
+                            onClick={() => {
+                              setRatingScore(score);
+                              setRatingSaveState('idle');
+                            }}
+                          >
+                            ★
+                          </button>
+                        ))}
+                      </div>
+                      <label>
+                        Beurteilung (optional)
+                        <textarea
+                          value={ratingComment}
+                          maxLength={200}
+                          rows={3}
+                          onChange={(event) => {
+                            setRatingComment(event.target.value);
+                            setRatingSaveState('idle');
+                          }}
+                        />
+                      </label>
+                      <p className="muted recipe-rating-character-count">
+                        {ratingComment.length}/200
+                      </p>
+                      <div className="recipe-rating-save-row">
+                        <button
+                          type="button"
+                          onClick={() => void saveRecipeRating()}
+                          disabled={busy}
+                        >
+                          {ratingSaveState === 'saving'
+                            ? 'Wird gespeichert ...'
+                            : 'Bewertung speichern'}
+                        </button>
+                        {ratingSaveState === 'saved' && (
+                          <span className="recipe-rating-saved" role="status">
+                            Bewertung gespeichert
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    {recipeRatings && recipeRatings.comments.length > 0 && (
+                      <ol className="recipe-rating-comments">
+                        {recipeRatings.comments.map((rating) => (
+                          <li key={`${rating.username}-${rating.created_at}`}>
+                            <strong>{rating.username}</strong> ({rating.score}/5): {rating.comment}
+                          </li>
+                        ))}
+                      </ol>
+                    )}
+                  </section>
                 )}
               </div>
             </>

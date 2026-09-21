@@ -11,6 +11,7 @@ import boto3
 from app.core.database import get_db, get_mongo_client
 from app.core.settings import Settings
 from app.repositories.group_repository import GroupRepository
+from app.repositories.rating_repository import RatingRepository
 from app.routers.groups import router as groups_router
 from app.routers.recipes import router as recipes_router
 from app.routers.users import (
@@ -126,6 +127,7 @@ async def lifespan(app: Litestar):
     # Bootstrap superuser if not exists
     await UserService(app.state.db).bootstrap_superuser()
     await GroupRepository(app.state.db).ensure_indexes()
+    await RatingRepository(app.state.db).ensure_indexes()
 
     yield
 
