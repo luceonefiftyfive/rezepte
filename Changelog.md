@@ -1,5 +1,11 @@
 # Change log
 
+## feat: rating handling v0.9.0
+
+- Added per-user recipe ratings with one to five stars and an optional review of up to 200 characters.
+- Ratings can be changed; recipe detail views now show the average score and written reviews in chronological order.
+- Added authenticated rating endpoints, MongoDB uniqueness protection per recipe and user, backend coverage, and API documentation.
+
 ## feat(account): add self-service profile and password settings v0.8.0
 
 - Added self-service account settings for updating the first name, last name, email address, and password.

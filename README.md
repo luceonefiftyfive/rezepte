@@ -21,6 +21,12 @@ Authenticated users can manage their own first name, last name, and email addres
 Changing a password requires the current password and confirmation of the new password. After a successful password change, the user is signed out and must sign in again with the new password.
 In the recipe overview, the reload action is shown as a circular reload icon. Its label is displayed as a tooltip on hover and remains available to assistive technologies.
 
+## Recipe ratings
+
+When reading a recipe, every authenticated user can give it one to five stars and add an optional review of up to 200 characters. A later submission updates that user's existing rating. The detail view shows the average score and all written reviews in chronological order. The overview does not show ratings.
+
+The API and data contract are described in [Recipe ratings](docs/backend/recipe-ratings.md).
+
 ## Additional information
 
 ### Docker commands

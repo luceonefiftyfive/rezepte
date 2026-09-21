@@ -1383,3 +1383,64 @@ textarea {
     grid-template-columns: 1fr;
   }
 }
+
+.recipe-ratings {
+  margin-top: 28px;
+  padding-top: 20px;
+  border-top: 1px solid #d1d5db;
+}
+
+.recipe-rating-summary {
+  font-weight: 600;
+}
+
+.recipe-rating-form {
+  display: grid;
+  gap: 10px;
+  max-width: 520px;
+}
+
+.recipe-star-picker {
+  display: flex;
+  gap: 4px;
+}
+
+.recipe-star {
+  min-width: 38px;
+  padding: 4px;
+  border: 0;
+  background: transparent;
+  color: #9ca3af;
+  font-size: 28px;
+  line-height: 1;
+}
+
+.recipe-star:hover,
+.recipe-star--selected {
+  background: transparent;
+  color: #d97706;
+}
+
+.recipe-rating-character-count {
+  margin: -6px 0 0;
+  text-align: right;
+}
+
+.recipe-rating-save-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.recipe-rating-saved {
+  color: #166534;
+  font-weight: 600;
+}
+
+.recipe-rating-comments {
+  display: grid;
+  gap: 8px;
+  margin: 20px 0 0;
+  padding-left: 20px;
+}
