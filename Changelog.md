@@ -1,5 +1,9 @@
 # Change log
 
+## fix(frontend): fractional ingredient amounts v0.9.1
+
+- Display common decimal ingredient amounts as fractions: `0.5`/`0,5` as `½`, `0.3`/`0,3` and `0.33`/`0,33` as `⅓`, `0.25` as `¼`, and `0.125`/`0,125` as `⅛`.
+
 ## feat: rating handling v0.9.0
 
 - Added per-user recipe ratings with one to five stars and an optional review of up to 200 characters.

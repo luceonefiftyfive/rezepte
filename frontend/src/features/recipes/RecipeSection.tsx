@@ -39,6 +39,19 @@ function getIngredientUnitLabel(unit: Unit, customUnit?: string | null): string 
   return unitLabels[unit] ?? unit;
 }
 
+function formatIngredientAmount(amount: string): string {
+  const normalized = amount.trim().replace(',', '.');
+  const fractionAmounts: Record<string, string> = {
+    '0.5': '½',
+    '0.3': '⅓',
+    '0.33': '⅓',
+    '0.25': '¼',
+    '0.125': '⅛',
+  };
+
+  return fractionAmounts[normalized] ?? amount;
+}
+
 function TextWithLinks({ text }: { text?: string }) {
   if (!text) {
     return null;
@@ -896,7 +909,7 @@ export function RecipeSection({
                       {section.ingredients.map((ingredient, index) => (
                         <li key={`${section.id}-${index}`}>
                           {ingredient.amount
-                            ? `${ingredient.amount} ${getIngredientUnitLabel(ingredient.unit, ingredient.custom_unit)} `
+                            ? `${formatIngredientAmount(ingredient.amount)} ${getIngredientUnitLabel(ingredient.unit, ingredient.custom_unit)} `
                             : ''}
                           <strong>{ingredient.name}</strong>
                           {ingredient.preparation ? `, ${ingredient.preparation}` : ''}
