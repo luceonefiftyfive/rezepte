@@ -110,6 +110,11 @@ describe('RecipeSection', () => {
             name: 'Für den Teig',
             ingredients: [
               { name: 'Mehl', amount: '500', unit: 'g', optional: false, scaling: 'linear' },
+              { name: 'Zucker', amount: '0,5', unit: 'tsp', optional: false, scaling: 'linear' },
+              { name: 'Hefe', amount: '0.3', unit: 'g', optional: false, scaling: 'linear' },
+              { name: 'Salz', amount: '0,33', unit: 'tsp', optional: false, scaling: 'linear' },
+              { name: 'Butter', amount: '0.25', unit: 'kg', optional: false, scaling: 'linear' },
+              { name: 'Vanille', amount: '0,125', unit: 'tsp', optional: false, scaling: 'linear' },
             ],
           },
         ],
@@ -131,6 +136,11 @@ describe('RecipeSection', () => {
     expect(detailSection).toHaveTextContent('Einfach');
     expect(detailSection).toHaveTextContent('https://example.com/brot');
     expect(detailSection).toHaveTextContent('Mehl');
+    expect(detailSection).toHaveTextContent('½ TL Zucker');
+    expect(detailSection).toHaveTextContent('⅓ g Hefe');
+    expect(detailSection).toHaveTextContent('⅓ TL Salz');
+    expect(detailSection).toHaveTextContent('¼ kg Butter');
+    expect(detailSection).toHaveTextContent('⅛ TL Vanille');
     expect(detailSection).toHaveTextContent('Teig kneten.');
     expect(detailSection).toHaveTextContent('Frisch servieren.');
     expect(screen.queryByText('Rezeptbücher anzeigen')).not.toBeInTheDocument();
