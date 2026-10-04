@@ -1,5 +1,10 @@
 # Change log
 
+## fix(frontend): improve recipe print layout v0.9.2
+
+- Arranged the recipe title, description, source, and metadata in the left column of the print layout.
+- Stacked the QR code and recipe image in the right column; ingredients continue below across the full page width.
+
 ## fix(frontend): fractional ingredient amounts v0.9.1
 
 - Display common decimal ingredient amounts as fractions: `0.5`/`0,5` as `½`, `0.3`/`0,3` and `0.33`/`0,33` as `⅓`, `0.25` as `¼`, and `0.125`/`0,125` as `⅛`.

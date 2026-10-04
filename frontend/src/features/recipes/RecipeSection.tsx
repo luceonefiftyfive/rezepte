@@ -855,9 +855,50 @@ export function RecipeSection({
                 </button>
               </div>
               <div className="recipe-print-content">
-                <div className="recipe-print-header print-only">
-                  <div className="recipe-print-title-row">
-                    <h1 className="recipe-print-title">{selectedRecipe.title}</h1>
+                <div className="recipe-print-layout">
+                  <div className="recipe-print-main">
+                    <div className="recipe-print-header print-only">
+                      <h1 className="recipe-print-title">{selectedRecipe.title}</h1>
+                      <div className="recipe-print-link-block">
+                        <p className="recipe-print-link">
+                          Rezept-Link: <a href={selectedRecipeShareUrl}>{selectedRecipeShareUrl}</a>
+                        </p>
+                      </div>
+                    </div>
+                    {selectedRecipe.description && <p>{selectedRecipe.description}</p>}
+                    {selectedRecipe.source && (
+                      <p>
+                        <strong>Quelle:</strong> <TextWithLinks text={selectedRecipe.source} />
+                      </p>
+                    )}
+                    {recipeImageUrl && (
+                      <img
+                        className="recipe-detail-image print-hide"
+                        src={recipeImageUrl}
+                        alt={`Rezeptbild ${selectedRecipe.title}`}
+                      />
+                    )}
+                    <div className="recipe-detail-meta">
+                      <p>
+                        <strong>Rezeptbücher:</strong>{' '}
+                        {selectedRecipe.group_ids.join(', ') || 'keine'}
+                      </p>
+                      <p>
+                        <strong>Schlagwörter:</strong> {selectedRecipe.tags.join(', ') || 'keine'}
+                      </p>
+                      <p>
+                        <strong>Portionen:</strong> {selectedRecipe.yield.amount}{' '}
+                        {selectedRecipe.yield.unit}
+                      </p>
+                      <p>
+                        <strong>Vorbereitung:</strong>{' '}
+                        {selectedRecipe.time.preparation_minutes ?? '–'} min ·{' '}
+                        <strong>Kochen:</strong> {selectedRecipe.time.cooking_minutes ?? '–'} min ·{' '}
+                        <strong>Ruhen:</strong> {selectedRecipe.time.resting_minutes ?? '–'} min
+                      </p>
+                    </div>
+                  </div>
+                  <div className="recipe-print-sidebar print-only">
                     {printQrCodeDataUrl && (
                       <img
                         className="recipe-print-qr"
@@ -865,42 +906,14 @@ export function RecipeSection({
                         alt="QR-Code fuer Rezept-Link"
                       />
                     )}
+                    {recipeImageUrl && (
+                      <img
+                        className="recipe-detail-image"
+                        src={recipeImageUrl}
+                        alt={`Rezeptbild ${selectedRecipe.title}`}
+                      />
+                    )}
                   </div>
-                  <div className="recipe-print-link-block">
-                    <p className="recipe-print-link">
-                      Rezept-Link: <a href={selectedRecipeShareUrl}>{selectedRecipeShareUrl}</a>
-                    </p>
-                  </div>
-                </div>
-                {selectedRecipe.description && <p>{selectedRecipe.description}</p>}
-                {selectedRecipe.source && (
-                  <p>
-                    <strong>Quelle:</strong> <TextWithLinks text={selectedRecipe.source} />
-                  </p>
-                )}
-                {recipeImageUrl && (
-                  <img
-                    className="recipe-detail-image"
-                    src={recipeImageUrl}
-                    alt={`Rezeptbild ${selectedRecipe.title}`}
-                  />
-                )}
-                <div className="recipe-detail-meta">
-                  <p>
-                    <strong>Rezeptbücher:</strong> {selectedRecipe.group_ids.join(', ') || 'keine'}
-                  </p>
-                  <p>
-                    <strong>Schlagwörter:</strong> {selectedRecipe.tags.join(', ') || 'keine'}
-                  </p>
-                  <p>
-                    <strong>Portionen:</strong> {selectedRecipe.yield.amount}{' '}
-                    {selectedRecipe.yield.unit}
-                  </p>
-                  <p>
-                    <strong>Vorbereitung:</strong> {selectedRecipe.time.preparation_minutes ?? '–'}{' '}
-                    min · <strong>Kochen:</strong> {selectedRecipe.time.cooking_minutes ?? '–'} min
-                    · <strong>Ruhen:</strong> {selectedRecipe.time.resting_minutes ?? '–'} min
-                  </p>
                 </div>
                 {selectedRecipe.ingredient_sections.map((section) => (
                   <div key={section.id}>
