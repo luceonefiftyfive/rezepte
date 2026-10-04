@@ -326,8 +326,18 @@ describe('RecipeSection', () => {
     fireEvent.click(screen.getByRole('button', { name: /Rezept anzeigen Brot/i }));
 
     await waitFor(() => {
-      const recipeImage = screen.getByAltText('Rezeptbild Brot') as HTMLImageElement;
-      expect(recipeImage.src).toContain('/api/recipes/images/recipes/recipe-1/cover/cover.jpg');
+      const screenRecipeImage = document.querySelector(
+        '.recipe-print-main .recipe-detail-image',
+      ) as HTMLImageElement;
+      const printRecipeImage = document.querySelector(
+        '.recipe-print-sidebar .recipe-detail-image',
+      ) as HTMLImageElement;
+      expect(screenRecipeImage.src).toContain(
+        '/api/recipes/images/recipes/recipe-1/cover/cover.jpg',
+      );
+      expect(printRecipeImage.src).toContain(
+        '/api/recipes/images/recipes/recipe-1/cover/cover.jpg',
+      );
     });
 
     const stepImage = screen.getByAltText('Schrittbild Brot') as HTMLImageElement;

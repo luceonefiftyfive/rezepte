@@ -1311,11 +1311,22 @@ textarea {
     border-bottom: 1px solid #d1d5db;
   }
 
-  .recipe-print-title-row {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
+  .recipe-print-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 108px;
+    align-items: start;
     gap: 16px;
+    margin-bottom: 14px;
+  }
+
+  .recipe-print-main {
+    min-width: 0;
+  }
+
+  .recipe-print-sidebar {
+    display: grid !important;
+    justify-items: stretch;
+    gap: 12px;
   }
 
   .recipe-print-title {
@@ -1354,6 +1365,16 @@ textarea {
     max-width: 100%;
     break-inside: avoid;
     page-break-inside: avoid;
+  }
+
+  .recipe-print-sidebar .recipe-detail-image {
+    width: 108px;
+    max-width: 108px;
+    height: 108px;
+    max-height: 108px;
+    flex-shrink: 0;
+    margin: 0;
+    object-fit: contain;
   }
 
   h2,
