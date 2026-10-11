@@ -167,6 +167,7 @@ export function AppHeader({
               type="search"
               className="header-search-input"
               aria-label="Rezepte durchsuchen"
+              autoFocus
               value={recipeSearchQuery}
               onChange={(event) => onRecipeSearchChange(event.target.value)}
               placeholder="Name, Zutat oder Schlagwort"

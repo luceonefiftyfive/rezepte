@@ -1,5 +1,9 @@
 # Change log
 
+## fix(frontend): show recipe search on mobile v0.9.3
+
+- Ensure the recipe search field is shown above page content and focused after tapping the search button on mobile browsers.
+
 ## fix(frontend): improve recipe print layout v0.9.2
 
 - Arranged the recipe title, description, source, and metadata in the left column of the print layout.
