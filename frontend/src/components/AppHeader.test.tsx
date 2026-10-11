@@ -50,6 +50,8 @@ describe('AppHeader', () => {
 
     await userEvent.click(screen.getByRole('button', { name: /suche/i }));
 
-    expect(screen.getByLabelText('Rezepte durchsuchen')).toBeInTheDocument();
+    const searchField = screen.getByLabelText('Rezepte durchsuchen');
+    expect(searchField).toBeInTheDocument();
+    expect(searchField).toHaveFocus();
   });
 });
