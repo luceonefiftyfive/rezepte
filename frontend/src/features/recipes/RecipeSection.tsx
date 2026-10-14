@@ -156,7 +156,7 @@ export function RecipeSection({
   const [status, setStatus] = useState('');
   const [busy, setBusy] = useState(false);
   const [recipePreviewImages, setRecipePreviewImages] = useState<
-    Record<string, { key: string; url: string }>
+    Record<string, { key: string; thumbnailUrl: string; originalUrl?: string }>
   >({});
   const [recipeImageUrl, setRecipeImageUrl] = useState<string | null>(null);
   const [stepImageUrls, setStepImageUrls] = useState<Record<string, string>>({});
@@ -449,8 +449,8 @@ export function RecipeSection({
 
     if (recipe.recipe_image_key) {
       const cached = recipePreviewImages[recipe.id];
-      if (cached?.key === recipe.recipe_image_key) {
-        nextRecipeImageUrl = cached.url;
+      if (cached?.key === recipe.recipe_image_key && cached.originalUrl) {
+        nextRecipeImageUrl = cached.originalUrl;
       } else {
         try {
           const response = await apiFetch<SignedImageUrlResponse>(
@@ -461,7 +461,11 @@ export function RecipeSection({
           nextRecipeImageUrl = response.view_url;
           setRecipePreviewImages((current) => ({
             ...current,
-            [recipe.id]: { key: recipe.recipe_image_key as string, url: response.view_url },
+            [recipe.id]: {
+              key: recipe.recipe_image_key as string,
+              thumbnailUrl: current[recipe.id]?.thumbnailUrl ?? response.view_url,
+              originalUrl: response.view_url,
+            },
           }));
         } catch {
           nextRecipeImageUrl = null;
@@ -514,14 +518,14 @@ export function RecipeSection({
       recipesNeedingPreview.map(async (recipe) => {
         try {
           const response = await apiFetch<SignedImageUrlResponse>(
-            `/recipes/${recipe.id}/image-url`,
+            `/recipes/${recipe.id}/thumbnail-url`,
             {},
             token,
           );
           return {
             id: recipe.id,
             key: recipe.recipe_image_key as string,
-            url: response.view_url,
+            thumbnailUrl: response.view_url,
           };
         } catch {
           return null;
@@ -535,7 +539,11 @@ export function RecipeSection({
       setRecipePreviewImages((current) => {
         const next = { ...current };
         for (const result of successful) {
-          next[result.id] = { key: result.key, url: result.url };
+          next[result.id] = {
+            key: result.key,
+            thumbnailUrl: result.thumbnailUrl,
+            originalUrl: current[result.id]?.originalUrl,
+          };
         }
         return next;
       });
@@ -790,7 +798,7 @@ export function RecipeSection({
                   const previewImageUrl =
                     recipe.recipe_image_key &&
                     recipePreviewImages[recipe.id]?.key === recipe.recipe_image_key
-                      ? recipePreviewImages[recipe.id]?.url
+                      ? recipePreviewImages[recipe.id]?.thumbnailUrl
                       : null;
 
                   return (

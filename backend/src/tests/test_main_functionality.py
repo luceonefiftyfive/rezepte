@@ -4,6 +4,7 @@ from unittest.mock import Mock
 from urllib.parse import urlsplit
 
 import pytest
+from PIL import Image
 from app import main as main_module
 from app.main import app, settings
 from botocore.exceptions import ClientError
@@ -23,6 +24,7 @@ class FakeS3Client:
         self.objects: dict[str, dict[str, object]] = {}
         self.put_object = Mock(side_effect=self._put_object)
         self.get_object = Mock(side_effect=self._get_object)
+        self.head_object = Mock(side_effect=self._head_object)
 
     def _put_object(self, *, Bucket, Key, Body, ContentType):
         self.objects[Key] = {"Body": Body, "ContentType": ContentType, "Bucket": Bucket}
@@ -37,6 +39,12 @@ class FakeS3Client:
             "Body": _FakeS3Body(stored["Body"]),
             "ContentType": stored["ContentType"],
         }
+
+    def _head_object(self, *, Bucket, Key):
+        if Key not in self.objects:
+            error_response = {"Error": {"Code": "NoSuchKey", "Message": "Not Found"}}
+            raise ClientError(error_response, "HeadObject")
+        return {"ContentType": self.objects[Key]["ContentType"]}
 
 
 @pytest.fixture(autouse=True)
@@ -511,9 +519,12 @@ async def test_non_admin_cannot_use_recipe_admin_tools(client):
 
 @pytest.mark.anyio
 async def test_image_upload_success(client):
+    image = Image.new("RGB", (800, 600), "red")
+    content = io.BytesIO()
+    image.save(content, format="PNG")
     response = await client.post(
         "/images/test-upload",
-        files={"file": ("dish.png", b"png-content", "image/png")},
+        files={"file": ("dish.png", content.getvalue(), "image/png")},
     )
     assert response.status_code == 200
     data = response.json()
@@ -521,13 +532,17 @@ async def test_image_upload_success(client):
     assert data["bucket"] == settings.s3_bucket
     assert data["key"].startswith("test-uploads/")
     assert data["key"].endswith("-dish.png")
-    assert data["size"] == len(b"png-content")
+    assert data["size"] == len(content.getvalue())
     assert data["content_type"] == "image/png"
-    app.state.s3_client.put_object.assert_called_once()
-    call = app.state.s3_client.put_object.call_args.kwargs
+    assert data["thumbnail_key"] == f"{data['key']}.thumbnail.jpg"
+    assert app.state.s3_client.put_object.call_count == 2
+    call = app.state.s3_client.put_object.call_args_list[0].kwargs
     assert call["Bucket"] == settings.s3_bucket
-    assert call["Body"] == b"png-content"
+    assert call["Body"] == content.getvalue()
     assert call["ContentType"] == "image/png"
+    thumbnail_call = app.state.s3_client.put_object.call_args_list[1].kwargs
+    assert thumbnail_call["Key"] == data["thumbnail_key"]
+    assert thumbnail_call["ContentType"] == "image/jpeg"
 
 
 @pytest.mark.anyio
@@ -562,9 +577,11 @@ async def test_image_upload_maps_s3_client_error_to_http_500(client):
         {"Error": {"Code": "InternalError", "Message": "upload failed"}},
         "PutObject",
     )
+    image_content = io.BytesIO()
+    Image.new("RGB", (10, 10), "red").save(image_content, format="JPEG")
     response = await client.post(
         "/images/test-upload",
-        files={"file": ("dish.jpg", b"jpeg-content", "image/jpeg")},
+        files={"file": ("dish.jpg", image_content.getvalue(), "image/jpeg")},
     )
     assert response.status_code == 500
     assert "upload failed" in response.json()["detail"]
@@ -603,6 +620,10 @@ async def test_recipe_scoped_image_upload_and_view_url(client):
         "remarks": None,
     }
 
+    image = Image.new("RGB", (800, 600), "red")
+    image_content = io.BytesIO()
+    image.save(image_content, format="JPEG")
+
     # Rezept erstellen
     created_response = await client.post(
         "/recipes",
@@ -619,7 +640,7 @@ async def test_recipe_scoped_image_upload_and_view_url(client):
         files={
             "file": (
                 "cover.jpg",
-                b"cover-jpeg-content",
+                image_content.getvalue(),
                 "image/jpeg",
             )
         },
@@ -631,6 +652,7 @@ async def test_recipe_scoped_image_upload_and_view_url(client):
     expected_prefix = "/api/recipes/images/"
 
     assert cover["key"].startswith(f"recipes/{recipe_id}/cover/")
+    assert cover["thumbnail_key"] == f"{cover['key']}.thumbnail.jpg"
     assert cover["view_url"].startswith(expected_prefix)
     assert "minio:9000" not in cover["view_url"]
 
@@ -640,7 +662,7 @@ async def test_recipe_scoped_image_upload_and_view_url(client):
         files={
             "file": (
                 "step.jpg",
-                b"step-jpeg-content",
+                image_content.getvalue(),
                 "image/jpeg",
             )
         },
@@ -651,6 +673,7 @@ async def test_recipe_scoped_image_upload_and_view_url(client):
     step = upload_step_response.json()
 
     assert step["key"].startswith(f"recipes/{recipe_id}/steps/step-1/")
+    assert step["thumbnail_key"] == f"{step['key']}.thumbnail.jpg"
     assert step["view_url"].startswith(expected_prefix)
     assert "minio:9000" not in step["view_url"]
 
@@ -704,7 +727,21 @@ async def test_recipe_scoped_image_upload_and_view_url(client):
     streamed_cover = await client.get(internal_path(cover["view_url"]))
     assert streamed_cover.status_code == 200, streamed_cover.text
     assert streamed_cover.headers["content-type"] == "image/jpeg"
-    assert streamed_cover.content == b"cover-jpeg-content"
+    assert streamed_cover.content == image_content.getvalue()
+
+    # A legacy image without a thumbnail is backfilled on its first preview request.
+    app.state.s3_client.objects.pop(cover["thumbnail_key"])
+    thumbnail_url_response = await client.get(
+        f"/recipes/{recipe_id}/thumbnail-url",
+        headers=headers,
+    )
+    assert thumbnail_url_response.status_code == 200, thumbnail_url_response.text
+    assert thumbnail_url_response.json()["key"] == cover["key"]
+    assert thumbnail_url_response.json()["view_url"].endswith(".thumbnail.jpg")
+    generated_thumbnail = app.state.s3_client.objects[cover["thumbnail_key"]]
+    assert generated_thumbnail["ContentType"] == "image/jpeg"
+    with Image.open(io.BytesIO(generated_thumbnail["Body"])) as thumbnail:
+        assert thumbnail.size == (360, 270)
 
     # URL des Arbeitsschritt-Bildes abfragen
     step_url_response = await client.get(
@@ -721,4 +758,4 @@ async def test_recipe_scoped_image_upload_and_view_url(client):
     streamed_step = await client.get(internal_path(step["view_url"]))
     assert streamed_step.status_code == 200, streamed_step.text
     assert streamed_step.headers["content-type"] == "image/jpeg"
-    assert streamed_step.content == b"step-jpeg-content"
+    assert streamed_step.content == image_content.getvalue()

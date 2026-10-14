@@ -354,6 +354,7 @@ async def upload_recipe_image(
         "ok": True,
         "bucket": settings.s3_bucket,
         "key": uploaded.key,
+        "thumbnail_key": uploaded.thumbnail_key,
         "size": uploaded.size,
         "content_type": uploaded.content_type,
         "view_url": _recipe_image_url(uploaded.key),
@@ -391,6 +392,7 @@ async def upload_instruction_image(
         "ok": True,
         "bucket": settings.s3_bucket,
         "key": uploaded.key,
+        "thumbnail_key": uploaded.thumbnail_key,
         "size": uploaded.size,
         "content_type": uploaded.content_type,
         "view_url": _recipe_image_url(uploaded.key),
@@ -418,6 +420,26 @@ async def get_recipe_image_url(
         "ok": True,
         "key": recipe.recipe_image_key,
         "view_url": view_url,
+    }
+
+
+@get("/{recipe_id:str}/thumbnail-url")
+async def get_recipe_thumbnail_url(
+    recipe_id: FromPath[str],
+    request: Request,
+    db: Db,
+    current_user: CurrentUser,
+) -> dict[str, object]:
+    recipe = await _get_accessible_recipe(recipe_id, db, current_user)
+    if not recipe.recipe_image_key:
+        raise HTTPException(status_code=404, detail="Recipe image not found")
+
+    image_service = ImageService(request.app.state.s3_client, settings)
+    thumbnail_key = await image_service.ensure_thumbnail(recipe.recipe_image_key)
+    return {
+        "ok": True,
+        "key": recipe.recipe_image_key,
+        "view_url": _recipe_image_url(thumbnail_key),
     }
 
 
@@ -468,6 +490,7 @@ router = Router(
         upload_recipe_image,
         upload_instruction_image,
         get_recipe_image_url,
+        get_recipe_thumbnail_url,
         get_instruction_image_url,
     ],
 )

@@ -118,6 +118,7 @@ export type ImageUploadResponse = {
   ok: boolean;
   bucket: string;
   key: string;
+  thumbnail_key?: string;
   size: number;
   content_type: string;
   view_url?: string;

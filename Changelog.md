@@ -1,5 +1,10 @@
 # Change log
 
+## feat(backend): create thumbnails for existing recipe images v0.10.0
+
+- Generate and store a thumbnail from an existing recipe image the first time its preview is requested.
+- Report thumbnail storage failures instead of silently serving the original image as a thumbnail.
+
 ## fix(frontend): show recipe search on mobile v0.9.3
 
 - Ensure the recipe search field is shown above page content and focused after tapping the search button on mobile browsers.

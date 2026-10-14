@@ -20,6 +20,7 @@ from app.routers.users import (
     require_super_admin,
 )
 from app.routers.users import router as users_router
+from app.services.image_service import ImageService
 from app.services.user_service import UserService
 from botocore.client import Config
 from botocore.exceptions import BotoCoreError, ClientError
@@ -246,38 +247,21 @@ async def upload_test_image(
     request: Request,
     data: ty.Annotated[UploadFile, Body(media_type=RequestEncodingType.MULTI_PART)],
 ) -> dict[str, ty.Any]:
-    if not data.content_type or not data.content_type.startswith("image/"):
-        raise HTTPException(status_code=400, detail="Only image files are allowed")
-
-    content = await data.read()
-
-    if len(content) == 0:
-        raise HTTPException(status_code=400, detail="Uploaded file is empty")
-
-    if len(content) > 25 * 1024 * 1024:
-        raise HTTPException(status_code=413, detail="Image is larger than 25 MB")
-
-    safe_filename = data.filename or "upload"
-    object_key = f"test-uploads/{uuid.uuid4()}-{safe_filename}"
-
-    try:
-        await asyncio.to_thread(
-            request.app.state.s3_client.put_object,
-            Bucket=settings.s3_bucket,
-            Key=object_key,
-            Body=content,
-            ContentType=data.content_type,
-        )
-
-    except (BotoCoreError, ClientError) as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    uploaded = await ImageService(
+        request.app.state.s3_client, settings
+    ).upload_image(
+        file=data,
+        key_prefix="test-uploads",
+        max_size_bytes=25 * 1024 * 1024,
+    )
 
     return {
         "ok": True,
         "bucket": settings.s3_bucket,
-        "key": object_key,
-        "size": len(content),
-        "content_type": data.content_type,
+        "key": uploaded.key,
+        "thumbnail_key": uploaded.thumbnail_key,
+        "size": uploaded.size,
+        "content_type": uploaded.content_type,
     }
 
 

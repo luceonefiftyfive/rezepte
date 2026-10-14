@@ -12,6 +12,7 @@ dependencies = [
     "pymongo>=4.13,<5",
     "motor>=3.7,<4",
     "boto3>=1.35,<2",
+    "pillow>=11.0,<12",
     "python-multipart>=0.0.20,<1",
     "python-jose>=3.5,<4",
     "pyyaml>=6.0,<7",
