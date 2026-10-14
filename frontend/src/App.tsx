@@ -87,6 +87,7 @@ export default function App() {
         {visibleSection === 'recipes' && isAuthenticated && (
           <RecipeSection
             searchQuery={recipeSearchQuery}
+            onClearSearch={() => setRecipeSearchQuery('')}
             createRequestVersion={recipeCreateRequestVersion}
             overviewRequestVersion={recipeOverviewRequestVersion}
             onOpenAccountSettings={handleOpenAccountSettings}

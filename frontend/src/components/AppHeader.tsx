@@ -6,6 +6,23 @@ import recipesLogo from '../../img/rezepte-logo-sage.png';
 
 type Section = 'general' | 'recipes' | 'admin';
 
+const RECIPE_SEARCH_HISTORY_KEY = 'recipe-search-history';
+const MAX_RECIPE_SEARCH_HISTORY_ENTRIES = 10;
+
+function getRecipeSearchHistory(): string[] {
+  try {
+    const storedHistory = localStorage.getItem(RECIPE_SEARCH_HISTORY_KEY);
+    if (!storedHistory) return [];
+
+    const parsedHistory: unknown = JSON.parse(storedHistory);
+    if (!Array.isArray(parsedHistory)) return [];
+
+    return parsedHistory.filter((value): value is string => typeof value === 'string');
+  } catch {
+    return [];
+  }
+}
+
 interface AppHeaderProps {
   activeSection: Section;
   onSelectSection: (section: Section) => void;
@@ -28,6 +45,7 @@ export function AppHeader({
   const [systemVersion, setSystemVersion] = useState<SystemVersionResponse | null>(null);
   const [versionLoading, setVersionLoading] = useState(false);
   const [versionError, setVersionError] = useState(false);
+  const [recipeSearchHistory, setRecipeSearchHistory] = useState<string[]>(getRecipeSearchHistory);
 
   async function loadSystemVersion(): Promise<void> {
     setVersionLoading(true);
@@ -49,6 +67,21 @@ export function AppHeader({
   function selectSection(section: Section) {
     onSelectSection(section);
     setMenuOpen(false);
+  }
+
+  function saveRecipeSearchQuery(): void {
+    const query = recipeSearchQuery.trim();
+    if (!query) return;
+
+    const nextHistory = [
+      query,
+      ...recipeSearchHistory.filter(
+        (entry) => entry.toLocaleLowerCase('de') !== query.toLocaleLowerCase('de'),
+      ),
+    ].slice(0, MAX_RECIPE_SEARCH_HISTORY_ENTRIES);
+
+    setRecipeSearchHistory(nextHistory);
+    localStorage.setItem(RECIPE_SEARCH_HISTORY_KEY, JSON.stringify(nextHistory));
   }
 
   const showRecipeActions = isAuthenticated && activeSection === 'recipes';
@@ -163,15 +196,27 @@ export function AppHeader({
           </div>
 
           {showRecipeActions && searchOpen && (
-            <input
-              type="search"
-              className="header-search-input"
-              aria-label="Rezepte durchsuchen"
-              autoFocus
-              value={recipeSearchQuery}
-              onChange={(event) => onRecipeSearchChange(event.target.value)}
-              placeholder="Name, Zutat oder Schlagwort"
-            />
+            <>
+              <input
+                type="search"
+                className="header-search-input"
+                aria-label="Rezepte durchsuchen"
+                autoFocus
+                value={recipeSearchQuery}
+                list="recipe-search-history"
+                onChange={(event) => onRecipeSearchChange(event.target.value)}
+                onBlur={saveRecipeSearchQuery}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') saveRecipeSearchQuery();
+                }}
+                placeholder="Name, Zutat oder Schlagwort"
+              />
+              <datalist id="recipe-search-history">
+                {recipeSearchHistory.map((query) => (
+                  <option key={query} value={query} />
+                ))}
+              </datalist>
+            </>
           )}
 
           <div className="hero-heading">

@@ -92,6 +92,35 @@ describe('RecipeSection', () => {
     expect(screen.queryByRole('heading', { name: 'Neues Rezept' })).not.toBeInTheDocument();
   });
 
+  it('clears the search when all tags are selected', async () => {
+    const onClearSearch = vi.fn();
+    mockGroups();
+    mockedApiFetch.mockResolvedValueOnce([
+      {
+        id: 'recipe-1',
+        title: 'Brot',
+        description: 'Einfach',
+        group_ids: ['family'],
+        tags: ['Backen'],
+        time: { preparation_minutes: 10, cooking_minutes: 40, resting_minutes: 60 },
+        yield: { amount: '1', unit: 'Laib' },
+        ingredient_sections: [],
+        instructions: [],
+        remarks: null,
+        created_at: '2026-07-12T12:00:00Z',
+        updated_at: '2026-07-12T12:00:00Z',
+        version: 1,
+      },
+    ]);
+
+    render(<RecipeSection searchQuery="Brot" onClearSearch={onClearSearch} />);
+    await waitFor(() => expect(screen.getByText('Brot')).toBeInTheDocument());
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Alle' })[1]);
+
+    expect(onClearSearch).toHaveBeenCalledOnce();
+  });
+
   it('shows recipe details when the list item is viewed', async () => {
     mockGroups();
     mockedApiFetch.mockResolvedValueOnce([
@@ -276,44 +305,67 @@ describe('RecipeSection', () => {
   });
 
   it('renders recipe and step images when signed URLs are available', async () => {
-    mockGroups();
-    mockedApiFetch
-      .mockResolvedValueOnce([
+    const groups = [
+      {
+        id: 'recipes',
+        name: 'Rezepte',
+        description: null,
+        created_at: '2026-07-17T10:00:00Z',
+        updated_at: '2026-07-17T10:00:00Z',
+      },
+      {
+        id: 'family',
+        name: 'Familie',
+        description: null,
+        created_at: '2026-07-17T10:00:00Z',
+        updated_at: '2026-07-17T10:00:00Z',
+      },
+    ];
+    const recipe = {
+      id: 'recipe-1',
+      title: 'Brot',
+      description: 'Mit Foto',
+      recipe_image_key: 'recipes/recipe-1/cover/cover.jpg',
+      group_ids: ['family'],
+      tags: ['Backen'],
+      time: { preparation_minutes: 10, cooking_minutes: 40, resting_minutes: 60 },
+      yield: { amount: '1', unit: 'Laib' },
+      ingredient_sections: [],
+      instructions: [
         {
-          id: 'recipe-1',
-          title: 'Brot',
-          description: 'Mit Foto',
-          recipe_image_key: 'recipes/recipe-1/cover/cover.jpg',
-          group_ids: ['family'],
-          tags: ['Backen'],
-          time: { preparation_minutes: 10, cooking_minutes: 40, resting_minutes: 60 },
-          yield: { amount: '1', unit: 'Laib' },
-          ingredient_sections: [],
-          instructions: [
-            {
-              id: 'step-1',
-              text: 'Teig kneten.',
-              image_key: 'recipes/recipe-1/steps/step-1/step.jpg',
-            },
-          ],
-          remarks: null,
-          created_at: '2026-07-12T12:00:00Z',
-          updated_at: '2026-07-12T12:00:00Z',
-          version: 1,
+          id: 'step-1',
+          text: 'Teig kneten.',
+          image_key: 'recipes/recipe-1/steps/step-1/step.jpg',
         },
-      ])
-      .mockResolvedValueOnce({
-        ok: true,
-        key: 'recipes/recipe-1/cover/cover.jpg',
-        view_url: 'https://nuc01/api/recipes/images/recipes/recipe-1/cover/cover.jpg',
-        expires_in: 3600,
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        key: 'recipes/recipe-1/steps/step-1/step.jpg',
-        view_url: 'https://nuc01/api/recipes/images/recipes/recipe-1/steps/step-1/step.jpg',
-        expires_in: 3600,
-      });
+      ],
+      remarks: null,
+      created_at: '2026-07-12T12:00:00Z',
+      updated_at: '2026-07-12T12:00:00Z',
+      version: 1,
+    };
+    const imageUrl = (key: string) => ({
+      ok: true,
+      key,
+      view_url: `https://nuc01/api/recipes/images/${key}`,
+      expires_in: 3600,
+    });
+
+    mockedApiFetch.mockImplementation((path) => {
+      if (path === '/groups' || path === '/groups?manageable_only=true') {
+        return Promise.resolve(groups);
+      }
+      if (path.startsWith('/recipes?')) return Promise.resolve([recipe]);
+      if (path === '/recipes/recipe-1/thumbnail-url') {
+        return Promise.resolve(imageUrl('recipes/recipe-1/cover/cover.jpg'));
+      }
+      if (path === '/recipes/recipe-1/image-url') {
+        return Promise.resolve(imageUrl('recipes/recipe-1/cover/cover.jpg'));
+      }
+      if (path === '/recipes/recipe-1/instructions/step-1/image-url') {
+        return Promise.resolve(imageUrl('recipes/recipe-1/steps/step-1/step.jpg'));
+      }
+      return Promise.reject(new Error(`Unexpected API request: ${path}`));
+    });
 
     render(<RecipeSection />);
     await waitFor(() => expect(screen.getByText('Brot')).toBeInTheDocument());

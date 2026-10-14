@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -17,6 +17,7 @@ import { AppHeader } from './AppHeader';
 describe('AppHeader', () => {
   beforeEach(() => {
     mockUseAuth.mockReset();
+    localStorage.clear();
   });
 
   it('shows the search field when the search toggle is pressed', async () => {
@@ -53,5 +54,31 @@ describe('AppHeader', () => {
     const searchField = screen.getByLabelText('Rezepte durchsuchen');
     expect(searchField).toBeInTheDocument();
     expect(searchField).toHaveFocus();
+  });
+
+  it('stores up to ten recent search terms for later selection', async () => {
+    mockUseAuth.mockReturnValue({
+      mayManageUsers: false,
+      isAuthenticated: true,
+      mayEditRecipes: true,
+    });
+    const onRecipeSearchChange = vi.fn();
+
+    render(
+      <AppHeader
+        activeSection="recipes"
+        onSelectSection={() => undefined}
+        onGoToRecipeOverview={() => undefined}
+        recipeSearchQuery="Kartoffelsuppe"
+        onRecipeSearchChange={onRecipeSearchChange}
+        onRequestCreateRecipe={() => undefined}
+      />,
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: /suche/i }));
+    fireEvent.keyDown(screen.getByLabelText('Rezepte durchsuchen'), { key: 'Enter' });
+
+    expect(localStorage.getItem('recipe-search-history')).toBe('["Kartoffelsuppe"]');
+    expect(document.querySelector('datalist option')).toHaveAttribute('value', 'Kartoffelsuppe');
   });
 });

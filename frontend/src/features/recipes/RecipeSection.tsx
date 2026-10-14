@@ -129,6 +129,7 @@ function setRecipeIdInUrl(recipeId: string | null): void {
 
 interface RecipeSectionProps {
   searchQuery?: string;
+  onClearSearch?: () => void;
   createRequestVersion?: number;
   overviewRequestVersion?: number;
   onOpenAccountSettings?: (target: 'profile' | 'password') => void;
@@ -136,6 +137,7 @@ interface RecipeSectionProps {
 
 export function RecipeSection({
   searchQuery = '',
+  onClearSearch = () => undefined,
   createRequestVersion = 0,
   overviewRequestVersion = 0,
   onOpenAccountSettings = () => undefined,
@@ -696,7 +698,10 @@ export function RecipeSection({
               <button
                 type="button"
                 className="button-secondary button-small"
-                onClick={() => setSelectedViewGroupIds(availableGroups.map((group) => group.id))}
+                onClick={() => {
+                  setSelectedViewGroupIds(availableGroups.map((group) => group.id));
+                  onClearSearch();
+                }}
               >
                 Alle
               </button>
@@ -773,7 +778,10 @@ export function RecipeSection({
               <button
                 type="button"
                 className={selectedTag === '' ? 'badge badge--active' : 'badge badge--ghost'}
-                onClick={() => setSelectedTag('')}
+                onClick={() => {
+                  setSelectedTag('');
+                  onClearSearch();
+                }}
               >
                 Alle
               </button>

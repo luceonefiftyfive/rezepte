@@ -1,5 +1,11 @@
 # Change log
 
+## fix(frontend): reset recipe search and stabilize tests v0.10.1
+
+- Clear the active recipe search when selecting "Alle" in the recipe overview.
+- Store up to ten recent recipe searches locally in the browser and offer them from the search field.
+- Add a single local test launcher and stabilize the signed recipe-image test.
+
 ## feat(backend): create thumbnails for existing recipe images v0.10.0
 
 - Generate and store a thumbnail from an existing recipe image the first time its preview is requested.
@@ -16,7 +22,8 @@
 
 ## fix(frontend): fractional ingredient amounts v0.9.1
 
-- Display common decimal ingredient amounts as fractions: `0.5`/`0,5` as `½`, `0.3`/`0,3` and `0.33`/`0,33` as `⅓`, `0.25` as `¼`, and `0.125`/`0,125` as `⅛`.
+- Display common decimal ingredient amounts as fractions: `0.5`/`0,5` as `½`, `0.3`/`0,3` and `0.33`/`0,33` as `⅓`,
+  `0.25` as `¼`, and `0.125`/`0,125` as `⅛`.
 
 ## feat: rating handling v0.9.0
 
