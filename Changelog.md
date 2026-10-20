@@ -1,5 +1,10 @@
 # Change log
 
+## [Unreleased]
+
+- Add formatting options for recipe instructions
+  - Allow line breaks and bold or italic formatting in recipe instructions.
+
 ## fix(frontend): reset recipe search and stabilize tests v0.10.1
 
 - Clear the active recipe search when selecting "Alle" in the recipe overview.

@@ -995,6 +995,13 @@ textarea {
   display: grid;
   gap: 8px;
 }
+.instruction-formatting {
+  display: flex;
+  gap: 6px;
+}
+.formatted-instruction {
+  white-space: pre-wrap;
+}
 .instruction-fields input[type='file'] {
   border: 1px dashed #9ca3af;
   background: #f9fafb;

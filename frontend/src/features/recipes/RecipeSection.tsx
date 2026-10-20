@@ -83,6 +83,23 @@ function TextWithLinks({ text }: { text?: string }) {
   );
 }
 
+function FormattedInstruction({ text }: { text: string }) {
+  const formattingRegex = /(\*\*[^*]+\*\*|\*[^*]+\*)/g;
+  return (
+    <span className="formatted-instruction">
+      {text.split(formattingRegex).map((part, index) => {
+        if (part.startsWith('**') && part.endsWith('**')) {
+          return <strong key={index}>{part.slice(2, -2)}</strong>;
+        }
+        if (part.startsWith('*') && part.endsWith('*')) {
+          return <em key={index}>{part.slice(1, -1)}</em>;
+        }
+        return <TextWithLinks key={index} text={part} />;
+      })}
+    </span>
+  );
+}
+
 function formatIngredient(recipe: Recipe): string {
   return recipe.ingredient_sections
     .flatMap((section) => section.ingredients)
@@ -954,7 +971,7 @@ export function RecipeSection({
                   <ol>
                     {selectedRecipe.instructions.map((step) => (
                       <li key={step.id}>
-                        {step.text}
+                        <FormattedInstruction text={step.text} />
                         {stepImageUrls[step.id] && (
                           <img
                             className="recipe-step-image"

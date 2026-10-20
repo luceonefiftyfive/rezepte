@@ -186,6 +186,23 @@ function parseInstructionMarkdown(markdown: string): Array<{ id: string; text: s
   return parseMarkdownLines(markdown).map((text) => ({ id: crypto.randomUUID(), text }));
 }
 
+function wrapInstructionSelection(
+  textarea: HTMLTextAreaElement | null,
+  marker: string,
+  update: (text: string) => void,
+) {
+  if (!textarea) return;
+  const { value, selectionStart, selectionEnd } = textarea;
+  const selectedText = value.slice(selectionStart, selectionEnd);
+  const nextValue = `${value.slice(0, selectionStart)}${marker}${selectedText || 'Text'}${marker}${value.slice(selectionEnd)}`;
+  update(nextValue);
+  requestAnimationFrame(() => {
+    textarea.focus();
+    const start = selectionStart + marker.length;
+    textarea.setSelectionRange(start, start + (selectedText || 'Text').length);
+  });
+}
+
 function newIngredient(): RecipeIngredient {
   return {
     name: '',
@@ -265,6 +282,7 @@ export function RecipeEditor({
   const [validationError, setValidationError] = useState('');
   const [recipeImageUrl, setRecipeImageUrl] = useState<string | null>(null);
   const [stepImageUrls, setStepImageUrls] = useState<Record<string, string>>({});
+  const instructionTextareas = useRef<Array<HTMLTextAreaElement | null>>([]);
   const initialDraftRef = useRef('');
 
   useEffect(() => {
@@ -849,6 +867,9 @@ export function RecipeEditor({
                   required={form.instructions.length === 1}
                   rows={2}
                   value={step.text}
+                  ref={(element) => {
+                    instructionTextareas.current[index] = element;
+                  }}
                   onChange={(e) =>
                     setForm({
                       ...form,
@@ -858,6 +879,42 @@ export function RecipeEditor({
                     })
                   }
                 />
+                <div className="instruction-formatting" aria-label="Textformatierung">
+                  <button
+                    type="button"
+                    className="button-secondary button-small"
+                    aria-label="Fett formatieren"
+                    onClick={() =>
+                      wrapInstructionSelection(instructionTextareas.current[index], '**', (text) =>
+                        setForm((current) => ({
+                          ...current,
+                          instructions: current.instructions.map((value, i) =>
+                            i === index ? { ...value, text } : value,
+                          ),
+                        })),
+                      )
+                    }
+                  >
+                    <strong>F</strong>
+                  </button>
+                  <button
+                    type="button"
+                    className="button-secondary button-small"
+                    aria-label="Kursiv formatieren"
+                    onClick={() =>
+                      wrapInstructionSelection(instructionTextareas.current[index], '*', (text) =>
+                        setForm((current) => ({
+                          ...current,
+                          instructions: current.instructions.map((value, i) =>
+                            i === index ? { ...value, text } : value,
+                          ),
+                        })),
+                      )
+                    }
+                  >
+                    <em>K</em>
+                  </button>
+                </div>
                 <input
                   type="file"
                   accept="image/*"
