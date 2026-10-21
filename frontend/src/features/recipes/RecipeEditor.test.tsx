@@ -182,7 +182,7 @@ describe('RecipeEditor', () => {
 
     await user.type(
       screen.getByLabelText('Arbeitsschritte (Markdown)'),
-      `- Salbeiblätter waschen und trocknen\n- Spaghetti kochen`,
+      `- Salbeiblätter waschen und trocknen\n  - gründlich abtropfen lassen\n    a) vorsichtig trocken tupfen\n- Spaghetti kochen`,
     );
     await user.click(screen.getByRole('button', { name: 'Beides importieren' }));
 
@@ -208,7 +208,7 @@ describe('RecipeEditor', () => {
       unit: 'as_needed',
     });
     expect(payload.instructions.map((step: { text: string }) => step.text)).toEqual([
-      'Salbeiblätter waschen und trocknen',
+      'Salbeiblätter waschen und trocknen\n  - gründlich abtropfen lassen\n    a) vorsichtig trocken tupfen',
       'Spaghetti kochen',
     ]);
   });

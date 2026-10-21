@@ -4,6 +4,7 @@
 
 - Add formatting options for recipe instructions
   - Allow line breaks and bold or italic formatting in recipe instructions.
+  - Preserve indented nested lists when importing instruction Markdown, including lettered sub-items.
 
 ## fix(frontend): reset recipe search and stabilize tests v0.10.1
 
@@ -101,8 +102,9 @@
 
 - Reworked the header layout for authenticated users (sticky top bar, more compact navigation, improved mobile behavior)
 - Added a toggleable recipe search field to the header while keeping the Create action as a quick action
-- Extracted the user information and sign-out functionality into the reusable SectionUserInfo component and integrated it into the Recipes, System, and Admin sections
-  Updated the application to render the System section only when the user is authenticated
+- Extracted the user information and sign-out functionality into the reusable SectionUserInfo component and integrated it
+  into the Recipes, System, and Admin sections.Updated the application to render the System section only when the
+  user is authenticated
 - Added a unit test for toggling the header search in frontend/src/components/AppHeader.test.tsx
 
 ## fix(frontend): set url' as link v0.3.1

@@ -85,18 +85,65 @@ function TextWithLinks({ text }: { text?: string }) {
 
 function FormattedInstruction({ text }: { text: string }) {
   const formattingRegex = /(\*\*[^*]+\*\*|\*[^*]+\*)/g;
-  return (
-    <span className="formatted-instruction">
-      {text.split(formattingRegex).map((part, index) => {
+  const formatInline = (value: string, keyPrefix: string) => (
+    <>
+      {value.split(formattingRegex).map((part, index) => {
         if (part.startsWith('**') && part.endsWith('**')) {
-          return <strong key={index}>{part.slice(2, -2)}</strong>;
+          return <strong key={`${keyPrefix}-${index}`}>{part.slice(2, -2)}</strong>;
         }
         if (part.startsWith('*') && part.endsWith('*')) {
-          return <em key={index}>{part.slice(1, -1)}</em>;
+          return <em key={`${keyPrefix}-${index}`}>{part.slice(1, -1)}</em>;
         }
-        return <TextWithLinks key={index} text={part} />;
+        return <TextWithLinks key={`${keyPrefix}-${index}`} text={part} />;
       })}
-    </span>
+    </>
+  );
+  type ListItem = { indent: number; marker: string; text: string; children: ListItem[] };
+  const items: ListItem[] = [];
+  const stack: ListItem[] = [];
+  const plainLines: Array<{ index: number; text: string }> = [];
+
+  text.split(/\r?\n/).forEach((line, index) => {
+    const match = line.match(/^(\s*)([-*+]|\d+[.)]|[a-zA-Z][.)])\s+(.*)$/);
+    if (!match) {
+      if (line.trim()) plainLines.push({ index, text: line.trim() });
+      return;
+    }
+    const item: ListItem = {
+      indent: match[1].length,
+      marker: match[2],
+      text: match[3],
+      children: [],
+    };
+    while (stack.length && stack[stack.length - 1].indent >= item.indent) stack.pop();
+    if (stack.length) stack[stack.length - 1].children.push(item);
+    else items.push(item);
+    stack.push(item);
+  });
+
+  const renderItems = (listItems: ListItem[], key: string) => {
+    const ordered = /^\d|^[a-zA-Z][.)]$/.test(listItems[0]?.marker ?? '');
+    const isAlpha = /^[a-zA-Z][.)]$/.test(listItems[0]?.marker ?? '');
+    const List = ordered ? 'ol' : 'ul';
+    return (
+      <List key={key} type={isAlpha ? 'a' : undefined}>
+        {listItems.map((item, index) => (
+          <li key={`${key}-${index}`}>
+            {formatInline(item.text, `${key}-${index}`)}
+            {item.children.length > 0 && renderItems(item.children, `${key}-${index}-children`)}
+          </li>
+        ))}
+      </List>
+    );
+  };
+
+  return (
+    <div className="formatted-instruction">
+      {plainLines.map(({ index, text: line }) => (
+        <p key={`line-${index}`}>{formatInline(line, `line-${index}`)}</p>
+      ))}
+      {items.length > 0 && renderItems(items, 'list')}
+    </div>
   );
 }
 

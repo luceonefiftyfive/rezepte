@@ -147,7 +147,7 @@ describe('RecipeSection', () => {
             ],
           },
         ],
-        instructions: [{ id: 'step-1', text: 'Teig kneten.' }],
+        instructions: [{ id: 'step-1', text: 'Teig kneten.\n- Falten\n  a) links\n  b) rechts' }],
         remarks: 'Frisch servieren.',
         created_at: '2026-07-12T12:00:00Z',
         updated_at: '2026-07-12T12:00:00Z',
@@ -171,6 +171,10 @@ describe('RecipeSection', () => {
     expect(detailSection).toHaveTextContent('¼ kg Butter');
     expect(detailSection).toHaveTextContent('⅛ TL Vanille');
     expect(detailSection).toHaveTextContent('Teig kneten.');
+    expect(detailSection?.querySelector('ul > li > ol')).toBeInTheDocument();
+    expect(detailSection).toHaveTextContent('Falten');
+    expect(detailSection).toHaveTextContent('links');
+    expect(detailSection).toHaveTextContent('rechts');
     expect(detailSection).toHaveTextContent('Frisch servieren.');
     expect(screen.queryByText('Rezeptbücher anzeigen')).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Rezept ansehen' })).not.toBeInTheDocument();

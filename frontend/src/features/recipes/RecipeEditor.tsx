@@ -183,7 +183,22 @@ function parseIngredientMarkdown(markdown: string): {
 }
 
 function parseInstructionMarkdown(markdown: string): Array<{ id: string; text: string }> {
-  return parseMarkdownLines(markdown).map((text) => ({ id: crypto.randomUUID(), text }));
+  const steps: string[] = [];
+  let currentStep: string[] = [];
+
+  for (const line of markdown.split(/\r?\n/)) {
+    if (!line.trim()) continue;
+    const isTopLevelItem = /^\s*([-*+]|\d+[.)])\s+/.test(line) && !/^\s{2,}/.test(line);
+    if (isTopLevelItem) {
+      if (currentStep.length > 0) steps.push(currentStep.join('\n'));
+      currentStep = [line.replace(/^\s*(?:[-*+]|\d+[.)])\s+/, '')];
+    } else if (currentStep.length > 0) {
+      currentStep.push(line);
+    }
+  }
+
+  if (currentStep.length > 0) steps.push(currentStep.join('\n'));
+  return steps.map((text) => ({ id: crypto.randomUUID(), text }));
 }
 
 function wrapInstructionSelection(
