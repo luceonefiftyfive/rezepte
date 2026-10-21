@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Return to the recipe overview with the browser's Back button after opening a recipe on mobile.
+
 - Add formatting options for recipe instructions
   - Allow line breaks and bold or italic formatting in recipe instructions.
   - Preserve indented nested lists when importing instruction Markdown, including lettered sub-items.

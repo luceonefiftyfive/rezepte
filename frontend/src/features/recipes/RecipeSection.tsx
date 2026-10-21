@@ -191,6 +191,17 @@ function setRecipeIdInUrl(recipeId: string | null): void {
   );
 }
 
+function pushRecipeIdToUrl(recipeId: string): void {
+  if (typeof window === 'undefined') return;
+  const nextUrl = new URL(window.location.href);
+  nextUrl.searchParams.set(RECIPE_QUERY_PARAM, recipeId);
+  window.history.pushState(
+    window.history.state,
+    '',
+    `${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`,
+  );
+}
+
 interface RecipeSectionProps {
   searchQuery?: string;
   onClearSearch?: () => void;
@@ -391,7 +402,7 @@ export function RecipeSection({
     setSelectedRecipe(recipe);
     setRatingSaveState('idle');
     setRecipeIdFromUrl(recipe.id);
-    setRecipeIdInUrl(recipe.id);
+    pushRecipeIdToUrl(recipe.id);
     setEditing(null);
     setIsEditorOpen(false);
   }
