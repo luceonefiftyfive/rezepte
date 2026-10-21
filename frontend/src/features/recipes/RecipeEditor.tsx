@@ -861,17 +861,6 @@ export function RecipeEditor({
       <div className="editor-block">
         <div className="section-heading compact">
           <h4>Zubereitung</h4>
-          <button
-            type="button"
-            onClick={() =>
-              setForm({
-                ...form,
-                instructions: [...form.instructions, { id: crypto.randomUUID(), text: '' }],
-              })
-            }
-          >
-            Schritt hinzufügen
-          </button>
         </div>
         <ol className="instruction-editor">
           {form.instructions.map((step, index) => (
@@ -945,22 +934,72 @@ export function RecipeEditor({
                   />
                 )}
               </div>
-              <button
-                type="button"
-                className="button-danger button-small"
-                aria-label="Schritt löschen"
-                onClick={() =>
-                  setForm({
-                    ...form,
-                    instructions: form.instructions.filter((_, i) => i !== index),
-                  })
-                }
-              >
-                ×
-              </button>
+              <div className="button-row">
+                <button
+                  type="button"
+                  className="button-secondary button-small"
+                  aria-label="Schritt nach oben"
+                  disabled={index === 0}
+                  onClick={() =>
+                    setForm((current) => {
+                      const instructions = [...current.instructions];
+                      [instructions[index - 1], instructions[index]] = [
+                        instructions[index],
+                        instructions[index - 1],
+                      ];
+                      return { ...current, instructions };
+                    })
+                  }
+                >
+                  ↑
+                </button>
+                <button
+                  type="button"
+                  className="button-secondary button-small"
+                  aria-label="Schritt nach unten"
+                  disabled={index === form.instructions.length - 1}
+                  onClick={() =>
+                    setForm((current) => {
+                      const instructions = [...current.instructions];
+                      [instructions[index], instructions[index + 1]] = [
+                        instructions[index + 1],
+                        instructions[index],
+                      ];
+                      return { ...current, instructions };
+                    })
+                  }
+                >
+                  ↓
+                </button>
+                <button
+                  type="button"
+                  className="button-danger button-small"
+                  aria-label="Schritt löschen"
+                  onClick={() =>
+                    setForm((current) => ({
+                      ...current,
+                      instructions: current.instructions.filter((_, i) => i !== index),
+                    }))
+                  }
+                >
+                  ×
+                </button>
+              </div>
             </li>
           ))}
         </ol>
+        <button
+          type="button"
+          className="button-secondary"
+          onClick={() =>
+            setForm((current) => ({
+              ...current,
+              instructions: [...current.instructions, { id: crypto.randomUUID(), text: '' }],
+            }))
+          }
+        >
+          Schritt hinzufügen
+        </button>
       </div>
       <label>
         Bemerkungen

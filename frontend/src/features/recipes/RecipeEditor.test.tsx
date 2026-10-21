@@ -83,6 +83,11 @@ describe('RecipeEditor', () => {
 
     await user.click(screen.getByRole('button', { name: 'Schritt hinzufügen' }));
     await user.type(screen.getByLabelText('Zubereitungsschritt 2'), 'Suppe pürieren.');
+    const moveUpButtons = screen.getAllByRole('button', { name: 'Schritt nach oben' });
+    const moveDownButtons = screen.getAllByRole('button', { name: 'Schritt nach unten' });
+    expect(moveUpButtons[0]).toBeDisabled();
+    expect(moveDownButtons[1]).toBeDisabled();
+    await user.click(moveDownButtons[0]);
     await user.click(screen.getByRole('button', { name: 'Speichern' }));
 
     expect(onSave).toHaveBeenCalledOnce();
@@ -103,8 +108,8 @@ describe('RecipeEditor', () => {
       unit: 'as_needed',
     });
     expect(payload.instructions.map((step: { text: string }) => step.text)).toEqual([
-      'Kartoffeln kochen.',
       'Suppe pürieren.',
+      'Kartoffeln kochen.',
     ]);
   });
 
