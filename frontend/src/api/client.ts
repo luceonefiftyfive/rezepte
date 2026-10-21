@@ -1,6 +1,10 @@
 export const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '/api';
 
 async function readResponseError(response: Response): Promise<string> {
+  if (response.status === 413) {
+    return 'Die Datei ist zu groß für den Import. Bitte reduzieren Sie die Dateigröße (maximal 100 MB).';
+  }
+
   try {
     const payload = (await response.json()) as {
       detail?: string | Array<{ msg?: string; loc?: Array<string | number> }>;

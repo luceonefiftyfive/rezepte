@@ -1,6 +1,7 @@
 import typing as ty
 
 from app.core.settings import Settings
+from app.models.ratings import RecipeRatingInput, RecipeRatingOut, RecipeRatingsOut
 from app.models.recipes import (
     RecipeCreate,
     RecipeExportFormat,
@@ -9,12 +10,11 @@ from app.models.recipes import (
     RecipeOut,
     RecipeUpdate,
 )
-from app.models.ratings import RecipeRatingInput, RecipeRatingOut, RecipeRatingsOut
 from app.models.user import Role
 from app.routers.users import CurrentUser, Db
 from app.services.image_service import ImageService
-from app.services.recipe_service import RecipeListSort, RecipeService
 from app.services.rating_service import RatingService
+from app.services.recipe_service import RecipeListSort, RecipeService
 from litestar import Request, Response, Router, delete, get, post, put
 from litestar.datastructures import UploadFile
 from litestar.enums import RequestEncodingType
@@ -135,7 +135,11 @@ async def purge_recipes(
     return {"ok": True, "group_id": group_id, "deleted_count": deleted_count}
 
 
-@post("/admin/import/preview", status_code=200)
+@post(
+    "/admin/import/preview",
+    status_code=200,
+    request_max_body_size=100 * 1024 * 1024,
+)
 async def preview_import_recipes(
     db: Db,
     request: Request,
@@ -150,7 +154,7 @@ async def preview_import_recipes(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-@post("/admin/import", status_code=200)
+@post("/admin/import", status_code=200, request_max_body_size=100 * 1024 * 1024)
 async def import_recipes(
     db: Db,
     request: Request,
