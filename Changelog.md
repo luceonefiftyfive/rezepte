@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## release: mobile navigation and instruction formatting v0.10.2
+
 - Return to the recipe overview with the browser's Back button after opening a recipe on mobile.
 
 - Add formatting options for recipe instructions
