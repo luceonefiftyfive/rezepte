@@ -3,6 +3,9 @@
 ## [Unreleased]
 
 - Move the "Schritt hinzufügen" button below the instruction steps and add controls to move steps up or down.
+- Focus the new input after adding a recipe ingredient or instruction step.
+- Allow instruction steps to be moved up or down; place the add-step button below the list.
+- Place the instruction image picker beside the formatting buttons.
 - Raise the recipe archive import limit to 100 MB and show a helpful message when an upload exceeds the limit.
 
 ## release: mobile navigation and instruction formatting v0.10.2

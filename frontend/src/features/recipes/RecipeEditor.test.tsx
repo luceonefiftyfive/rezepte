@@ -77,11 +77,13 @@ describe('RecipeEditor', () => {
 
     await user.click(screen.getByRole('button', { name: 'Zutat hinzufügen' }));
     const ingredientInputs = screen.getAllByLabelText('Zutat');
+    expect(ingredientInputs[1]).toHaveFocus();
     await user.type(ingredientInputs[1], 'Salz');
     const unitInputs = screen.getAllByLabelText('Einheit');
     await user.selectOptions(unitInputs[1], 'as_needed');
 
     await user.click(screen.getByRole('button', { name: 'Schritt hinzufügen' }));
+    expect(screen.getByLabelText('Zubereitungsschritt 2')).toHaveFocus();
     await user.type(screen.getByLabelText('Zubereitungsschritt 2'), 'Suppe pürieren.');
     const moveUpButtons = screen.getAllByRole('button', { name: 'Schritt nach oben' });
     const moveDownButtons = screen.getAllByRole('button', { name: 'Schritt nach unten' });

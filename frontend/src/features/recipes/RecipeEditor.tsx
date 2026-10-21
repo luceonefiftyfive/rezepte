@@ -297,7 +297,10 @@ export function RecipeEditor({
   const [validationError, setValidationError] = useState('');
   const [recipeImageUrl, setRecipeImageUrl] = useState<string | null>(null);
   const [stepImageUrls, setStepImageUrls] = useState<Record<string, string>>({});
+  const ingredientNameInputs = useRef<Record<string, HTMLInputElement | null>>({});
+  const pendingIngredientFocusRef = useRef<string | null>(null);
   const instructionTextareas = useRef<Array<HTMLTextAreaElement | null>>([]);
+  const pendingInstructionFocusRef = useRef<string | null>(null);
   const initialDraftRef = useRef('');
 
   useEffect(() => {
@@ -803,6 +806,14 @@ export function RecipeEditor({
                   required={section.ingredients.length === 1}
                   placeholder="Zutat"
                   value={ingredient.name}
+                  ref={(element) => {
+                    const inputKey = `${section.id}-${ingredientIndex}`;
+                    ingredientNameInputs.current[inputKey] = element;
+                    if (element && pendingIngredientFocusRef.current === inputKey) {
+                      element.focus();
+                      pendingIngredientFocusRef.current = null;
+                    }
+                  }}
                   onChange={(e) =>
                     updateIngredient(sectionIndex, ingredientIndex, { name: e.target.value })
                   }
@@ -845,12 +856,20 @@ export function RecipeEditor({
             <button
               type="button"
               className="button-secondary"
-              onClick={() =>
-                updateSection(sectionIndex, {
-                  ...section,
-                  ingredients: [...section.ingredients, newIngredient()],
-                })
-              }
+              onClick={() => {
+                pendingIngredientFocusRef.current = `${section.id}-${section.ingredients.length}`;
+                setForm((current) => ({
+                  ...current,
+                  ingredient_sections: current.ingredient_sections.map((currentSection, index) =>
+                    index === sectionIndex
+                      ? {
+                          ...currentSection,
+                          ingredients: [...currentSection.ingredients, newIngredient()],
+                        }
+                      : currentSection,
+                  ),
+                }));
+              }}
             >
               Zutat hinzufügen
             </button>
@@ -873,6 +892,10 @@ export function RecipeEditor({
                   value={step.text}
                   ref={(element) => {
                     instructionTextareas.current[index] = element;
+                    if (element && pendingInstructionFocusRef.current === step.id) {
+                      element.focus();
+                      pendingInstructionFocusRef.current = null;
+                    }
                   }}
                   onChange={(e) =>
                     setForm({
@@ -918,13 +941,16 @@ export function RecipeEditor({
                   >
                     <em>K</em>
                   </button>
+                  <label className="instruction-image-picker">
+                    <span>Bild:</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(event) => void handleInstructionImageUpload(step.id, event)}
+                      disabled={busy || !recipe || !onUploadInstructionImage}
+                    />
+                  </label>
                 </div>
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={(event) => void handleInstructionImageUpload(step.id, event)}
-                  disabled={busy || !recipe || !onUploadInstructionImage}
-                />
                 {step.image_key && <p className="muted">Key: {step.image_key}</p>}
                 {stepImageUrls[step.id] && (
                   <img
@@ -934,11 +960,12 @@ export function RecipeEditor({
                   />
                 )}
               </div>
-              <div className="button-row">
+              <div className="button-row instruction-actions">
                 <button
                   type="button"
-                  className="button-secondary button-small"
+                  className="button-secondary button-small instruction-order-button"
                   aria-label="Schritt nach oben"
+                  title="Schritt nach oben"
                   disabled={index === 0}
                   onClick={() =>
                     setForm((current) => {
@@ -951,12 +978,13 @@ export function RecipeEditor({
                     })
                   }
                 >
-                  ↑
+                  ⌃
                 </button>
                 <button
                   type="button"
-                  className="button-secondary button-small"
+                  className="button-secondary button-small instruction-order-button"
                   aria-label="Schritt nach unten"
+                  title="Schritt nach unten"
                   disabled={index === form.instructions.length - 1}
                   onClick={() =>
                     setForm((current) => {
@@ -969,7 +997,7 @@ export function RecipeEditor({
                     })
                   }
                 >
-                  ↓
+                  ⌄
                 </button>
                 <button
                   type="button"
@@ -991,12 +1019,14 @@ export function RecipeEditor({
         <button
           type="button"
           className="button-secondary"
-          onClick={() =>
+          onClick={() => {
+            const newStep = { id: crypto.randomUUID(), text: '' };
+            pendingInstructionFocusRef.current = newStep.id;
             setForm((current) => ({
               ...current,
-              instructions: [...current.instructions, { id: crypto.randomUUID(), text: '' }],
-            }))
-          }
+              instructions: [...current.instructions, newStep],
+            }));
+          }}
         >
           Schritt hinzufügen
         </button>
