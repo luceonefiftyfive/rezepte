@@ -66,7 +66,12 @@ export type IngredientSection = {
   name: string | null;
   ingredients: RecipeIngredient[];
 };
-export type InstructionStep = { id: string; text: string; image_key?: string | null };
+export type InstructionStep = {
+  id: string;
+  text: string;
+  image_key?: string | null;
+  image_url?: string | null;
+};
 export type RecipeTime = {
   preparation_minutes: number | null;
   cooking_minutes: number | null;
@@ -91,6 +96,7 @@ export type Recipe = RecipePayload & {
   created_at: string;
   updated_at: string;
   version: number;
+  recipe_image_url?: string | null;
 };
 export type RecipeListSort = 'created_desc' | 'title_asc';
 export type RecipeRating = {

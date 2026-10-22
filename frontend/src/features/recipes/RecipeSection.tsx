@@ -520,52 +520,31 @@ export function RecipeSection({
     );
   }
 
-  async function refreshSelectedRecipeImageUrls(recipe: Recipe) {
-    let nextRecipeImageUrl: string | null = null;
-    const nextStepImageUrls: Record<string, string> = {};
-
-    if (recipe.recipe_image_key) {
-      const cached = recipePreviewImages[recipe.id];
-      if (cached?.key === recipe.recipe_image_key && cached.originalUrl) {
-        nextRecipeImageUrl = cached.originalUrl;
-      } else {
-        try {
-          const response = await apiFetch<SignedImageUrlResponse>(
-            `/recipes/${recipe.id}/image-url`,
-            {},
-            token,
-          );
-          nextRecipeImageUrl = response.view_url;
-          setRecipePreviewImages((current) => ({
-            ...current,
-            [recipe.id]: {
-              key: recipe.recipe_image_key as string,
-              thumbnailUrl: current[recipe.id]?.thumbnailUrl ?? response.view_url,
-              originalUrl: response.view_url,
-            },
-          }));
-        } catch {
-          nextRecipeImageUrl = null;
-        }
-      }
+  function refreshSelectedRecipeImageUrls(recipe: Recipe) {
+    const cached = recipePreviewImages[recipe.id];
+    const nextRecipeImageUrl = recipe.recipe_image_url ?? null;
+    if (
+      recipe.recipe_image_key &&
+      nextRecipeImageUrl &&
+      (cached?.key !== recipe.recipe_image_key || cached.originalUrl !== nextRecipeImageUrl)
+    ) {
+      setRecipePreviewImages((current) => ({
+        ...current,
+        [recipe.id]: {
+          key: recipe.recipe_image_key as string,
+          thumbnailUrl: current[recipe.id]?.thumbnailUrl ?? nextRecipeImageUrl,
+          originalUrl: nextRecipeImageUrl,
+        },
+      }));
     }
-
-    for (const step of recipe.instructions) {
-      if (!step.image_key) continue;
-      try {
-        const response = await apiFetch<SignedImageUrlResponse>(
-          `/recipes/${recipe.id}/instructions/${step.id}/image-url`,
-          {},
-          token,
-        );
-        nextStepImageUrls[step.id] = response.view_url;
-      } catch {
-        // Keep detail rendering resilient even with stale image keys.
-      }
-    }
-
     setRecipeImageUrl(nextRecipeImageUrl);
-    setStepImageUrls(nextStepImageUrls);
+    setStepImageUrls(
+      Object.fromEntries(
+        recipe.instructions
+          .filter((step) => step.image_url)
+          .map((step) => [step.id, step.image_url as string]),
+      ),
+    );
   }
 
   useEffect(() => {

@@ -182,6 +182,7 @@ async def stream_recipe_image(
     return Response(
         content=downloaded.content,
         media_type=downloaded.content_type,
+        headers={"Cache-Control": "public, max-age=86400"},
     )
 
 

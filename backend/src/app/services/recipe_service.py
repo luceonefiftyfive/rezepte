@@ -2,7 +2,7 @@ import base64
 import io
 import uuid
 import zipfile
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any
 
@@ -40,6 +40,13 @@ class RecipeService:
     @staticmethod
     def _to_output(document: dict[str, Any]) -> RecipeOut:
         document = {key: value for key, value in document.items() if key != "_id"}
+        if document.get("recipe_image_key"):
+            document["recipe_image_url"] = (
+                f"/api/recipes/images/{document['recipe_image_key']}"
+            )
+        for step in document.get("instructions", []):
+            if step.get("image_key"):
+                step["image_url"] = f"/api/recipes/images/{step['image_key']}"
         return RecipeOut.model_validate(document)
 
     async def list_recipes(
@@ -65,7 +72,7 @@ class RecipeService:
         return self._to_output(document) if document else None
 
     async def create_recipe(self, recipe: RecipeCreate) -> RecipeOut:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         document = recipe.model_dump(by_alias=True, mode="json") | {
             "id": str(uuid.uuid4()),
             "created_at": now,
@@ -81,7 +88,7 @@ class RecipeService:
         values = recipe.model_dump(
             by_alias=True, mode="json", exclude_none=True, exclude={"version"}
         )
-        values["updated_at"] = datetime.now(timezone.utc)
+        values["updated_at"] = datetime.now(UTC)
         updated = await self.repository.update_with_version(
             recipe_id, recipe.version, values
         )
@@ -106,7 +113,7 @@ class RecipeService:
         )
         return RecipeExportPayload(
             export_schema="rezepte.recipes.export.v1",
-            exported_at=datetime.now(timezone.utc),
+            exported_at=datetime.now(UTC),
             count=len(recipes),
             filters={"group_id": group_id},
             recipes=recipes,
@@ -246,7 +253,7 @@ class RecipeService:
         downloaded_images = await self._download_export_images(recipes)
         payload = RecipeExportPayload(
             export_schema="rezepte.recipes.export.v1",
-            exported_at=datetime.now(timezone.utc),
+            exported_at=datetime.now(UTC),
             count=len(recipes),
             filters={"group_id": group_id},
             recipes=recipes,
@@ -356,7 +363,7 @@ class RecipeService:
             return normalized
 
         parsed_create = RecipeCreate.model_validate(raw_recipe)
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         return parsed_create.model_dump(mode="json", by_alias=True) | {
             "id": str(uuid.uuid4()),
             "created_at": now,
