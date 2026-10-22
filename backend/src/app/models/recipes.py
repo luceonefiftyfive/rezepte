@@ -63,6 +63,10 @@ class InstructionStep(BaseModel):
     image_key: str | None = Field(default=None, max_length=500)
 
 
+class InstructionStepOut(InstructionStep):
+    image_url: str | None = None
+
+
 class RecipeTime(BaseModel):
     preparation_minutes: int | None = Field(default=None, ge=0, le=10080)
     cooking_minutes: int | None = Field(default=None, ge=0, le=10080)
@@ -122,10 +126,12 @@ class RecipeUpdate(BaseModel):
 
 
 class RecipeOut(RecipeBase):
+    instructions: list[InstructionStepOut] = Field(default_factory=list)
     id: str
     created_at: datetime
     updated_at: datetime
     version: int
+    recipe_image_url: str | None = None
 
 
 class RecipeExportFormat(StrEnum):

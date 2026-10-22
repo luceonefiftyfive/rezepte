@@ -330,6 +330,7 @@ describe('RecipeSection', () => {
       title: 'Brot',
       description: 'Mit Foto',
       recipe_image_key: 'recipes/recipe-1/cover/cover.jpg',
+      recipe_image_url: '/api/recipes/images/recipes/recipe-1/cover/cover.jpg',
       group_ids: ['family'],
       tags: ['Backen'],
       time: { preparation_minutes: 10, cooking_minutes: 40, resting_minutes: 60 },
@@ -340,6 +341,7 @@ describe('RecipeSection', () => {
           id: 'step-1',
           text: 'Teig kneten.',
           image_key: 'recipes/recipe-1/steps/step-1/step.jpg',
+          image_url: '/api/recipes/images/recipes/recipe-1/steps/step-1/step.jpg',
         },
       ],
       remarks: null,
@@ -361,12 +363,6 @@ describe('RecipeSection', () => {
       if (path.startsWith('/recipes?')) return Promise.resolve([recipe]);
       if (path === '/recipes/recipe-1/thumbnail-url') {
         return Promise.resolve(imageUrl('recipes/recipe-1/cover/cover.jpg'));
-      }
-      if (path === '/recipes/recipe-1/image-url') {
-        return Promise.resolve(imageUrl('recipes/recipe-1/cover/cover.jpg'));
-      }
-      if (path === '/recipes/recipe-1/instructions/step-1/image-url') {
-        return Promise.resolve(imageUrl('recipes/recipe-1/steps/step-1/step.jpg'));
       }
       return Promise.reject(new Error(`Unexpected API request: ${path}`));
     });

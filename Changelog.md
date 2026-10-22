@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+- perf(backend): reduce recipe image load latency
+  - Include direct URLs for recipe and instruction images in recipe responses, avoiding follow-up URL requests when
+    opening a recipe.
+  - Cache streamed images for 24 hours with a `Cache-Control` response header.
+
 ## fix(frontend): improve recipe editor step workflow v0.10.3
 
 - Move the "Schritt hinzufügen" button below the instruction steps and add controls to move steps up or down.

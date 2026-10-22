@@ -1,15 +1,14 @@
 import asyncio
-from io import BytesIO
 import re
 import uuid
 from dataclasses import dataclass
+from io import BytesIO
 
 from app.core.settings import Settings
 from botocore.exceptions import BotoCoreError, ClientError
 from litestar.datastructures import UploadFile
 from litestar.exceptions import HTTPException
 from PIL import Image, ImageOps, UnidentifiedImageError
-
 
 THUMBNAIL_MAX_SIZE = (360, 360)
 
@@ -173,9 +172,7 @@ class ImageService:
             content = await asyncio.to_thread(response["Body"].read)
         except ClientError as exc:
             if self._is_missing_object_error(exc):
-                raise HTTPException(
-                    status_code=404, detail="Image not found"
-                ) from exc
+                raise HTTPException(status_code=404, detail="Image not found") from exc
             raise HTTPException(
                 status_code=500, detail="Unable to download image"
             ) from exc
