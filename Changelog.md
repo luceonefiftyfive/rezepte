@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- doc: update documentation to current status
 - perf(backend): reduce recipe image load latency
   - Include direct URLs for recipe and instruction images in recipe responses, avoiding follow-up URL requests when
     opening a recipe.

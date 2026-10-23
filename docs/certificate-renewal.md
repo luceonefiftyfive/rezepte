@@ -81,6 +81,7 @@ If the request returns a valid HTTPS response, the certificate is working correc
 
 ## Notes
 
-- Certbot stores the certificate in the Letsencrypt directory mounted by Docker.
+- Certbot stores certificates under `docker/certbot/conf`. Docker mounts this directory at
+  `/etc/letsencrypt` in the Certbot and Nginx containers.
 - The ACME challenge must be reachable on port 80 for validation to succeed.
 - If SSL errors continue after renewal, check the Nginx configuration and confirm certificate paths are correct.

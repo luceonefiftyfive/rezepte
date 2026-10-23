@@ -96,6 +96,7 @@ Returned by most user endpoints.
   "last_name": "Doe",
   "email": "john@example.com",
   "email_verified": false,
+  "default_group_id": "recipes",
   "groups": [
     {
       "group_id": "recipes",

@@ -1,10 +1,10 @@
 # Database structure
 
-_Rezepte_ is using a mongo db (see [https://en.wikipedia.org/wiki/MongoDB]).
+_Rezepte_ uses MongoDB (see [MongoDB](https://www.mongodb.com/)).
 
 ## Database structure
 
-Used data base structure can be described in following json
+The database structure is represented by the following JSON example:
 
 ```json
 {
@@ -20,6 +20,7 @@ Used data base structure can be described in following json
         "last_name": "string",
         "email": "string",
         "email_verified": "boolean",
+        "default_group_id": "string|null (optional)",
         "groups": [
           {
             "group_id": "string",
@@ -153,7 +154,7 @@ Used data base structure can be described in following json
         "user_id": "string (users._id)",
         "username": "string",
         "score": "int (1-5)",
-        "comment": "string (max 200 characters)",
+        "comment": "string (optional, max 200 characters; defaults to empty string)",
         "created_at": "datetime",
         "updated_at": "datetime"
       },
@@ -188,7 +189,6 @@ Used data base structure can be described in following json
 
 ## Example
 
-A short overview about data strcuture is provided by folloning image which represents
-data sructure filled with example data.
+The following image shows an example of the database structure populated with sample data.
 
 ![example data](mongodb-example.png)

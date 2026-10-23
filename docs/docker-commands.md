@@ -183,7 +183,7 @@ sudo ./docker/rezepte.sh --profile tools run --rm certbot certonly \
 Check generated files:
 
 ```bash
-sudo
+sudo ls -l docker/certbot/conf/live/rezepte.unbenet.de/
 ```
 
 Switch back to HTTPS:

@@ -8,42 +8,44 @@ Choose the new version according to [Semantic Versioning](https://semver.org):
 - **MINOR** (1.3.1 → 1.4.0): new backward-compatible functionality
 - **MAJOR** (1.4.0 → 2.0.0): incompatible or breaking changes
 
-## 3. Update the Changelog
+Check the current version in [version.yaml](../version.yaml) and choose the next version.
 
-Update the version content in [Changelog.md](../Changelog.md):
+## 2. Update the Changelog
 
-## 4. Update the Version File
+Add the release notes to [Changelog.md](../Changelog.md). Move the completed release
+entries out of the `Unreleased` section and add a heading containing the release
+version.
 
-Update the version in [version.yaml](../version.yaml):
+## 3. Update the Version File
+
+Set the new version in [version.yaml](../version.yaml):
 
 ```yaml
-version: 0.4.1
+version: <new-version>
 ```
 
-## 5. Commit the Changes
+## 4. Commit the Changes
 
-Add and commit the updated version file:
+Review and commit the changelog and version file:
 
 ```bash
 git add version.yaml Changelog.md
-git commit -m "chore(release): prepare version 0.4.1"
+git commit -m "chore(release): prepare version <new-version>"
 ```
 
-## 6. Create the Git Tag
+## 5. Create the Git Tag
 
-Create an annotated tag for the release:
+Create an annotated tag using the `v` prefix:
 
 ```bash
-git tag -a v0.4.1 -m "Release version 0.4.1"
+git tag -a v<new-version> -m "Release version <new-version>"
 ```
 
-## 7. Push the Commit and Tag
+## 6. Push the Commit and Tag
 
-Push the commit and the new tag to the remote repository:
+Push the release commit and tag to the remote repository:
 
 ```bash
 git push origin HEAD
-git push origin --tags
+git push origin v<new-version>
 ```
-
-Alternatively, push the commit and all loca
